@@ -1,0 +1,14 @@
+{
+    "python.pythonPath": "/home/eric/Venvs/md/bin/python3",
+    "python.venvPath": "/home/eric/Venvs",
+    "python.globalModuleInstallation": true,
+    "python.linting.enabled": true,
+    "editor.formatOnSave": true,
+    "git.confirmSync": false,
+    "git.autofetch": true,
+    "csv-preview.separator": ";",
+    "workbench.startupEditor": "newUntitledFile",
+    "python.formatting.autopep8Args": [
+        "--max-line-length=100"
+    ]
+}
