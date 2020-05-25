@@ -51,6 +51,31 @@ class PDBReader(IReader):
 
         self._frame_size = self._n_atoms*self._coords_size
 
+        self.parse_first_frame()
+
+    def parse_first_frame(self):
+
+        # Rewind the file to the beginning of the first frame
+        self._fin.seek(self._frame_starts[0])
+        data = self._fin.read(self._frame_size)
+
+        self._atom_names = []
+        self._atom_ids = []
+        self._atom_types = []
+        self._residue_names = []
+        self._residue_ids = []
+
+        for i in range(self._n_atoms):
+            start = i*self._coords_size
+            end = start + self._coords_size
+            line = data[start:end]
+            self._atom_ids.append(int(line[6:11]))
+            self._atom_names.append(line[12:16].strip())
+            self._residue_names.append(line[17:20].strip())
+            self._residue_ids.append(int(line[22:26]))
+
+        self.guess_atom_types()
+
     def read_frame(self, frame):
 
         # Rewind the file to the beginning of the frame
@@ -58,26 +83,18 @@ class PDBReader(IReader):
 
         data = self._fin.read(self._frame_size)
 
-        residue_ids = []
-        residue_names = []
-        atom_names = []
-        atom_ids = []
         coords = np.empty((self._n_atoms, 3), dtype=np.float)
 
         for i in range(self._n_atoms):
             start = i*self._coords_size
             end = start + self._coords_size
             line = data[start:end]
-            atom_ids.append(int(line[6:11]))
-            atom_names.append(line[12:16].strip())
-            residue_names.append(line[17:20].strip())
-            residue_ids.append(int(line[22:26]))
             x = float(line[30:38])
             y = float(line[38:46])
             z = float(line[46:54])
             coords[i, :] = [x, y, z]
 
-        return residue_ids, residue_names, atom_ids, atom_names, coords
+        return coords
 
     def read_pbc(self, frame):
 

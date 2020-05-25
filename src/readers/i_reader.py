@@ -2,9 +2,12 @@ import abc
 import os
 import yaml
 
+import numpy as np
+
 import waterstay
 
 from waterstay.database import CHEMICAL_ELEMENTS
+from waterstay.extensions.connectivity import PyConnectivity
 
 STANDARD_RESIDUES = ['AIB', 'ALA', 'ARG', 'ARGN', 'ASN', 'ASP', 'ASPH', 'CYS', 'CYS2', 'CYSH', 'CYX',
                      'GLN', 'GLU', 'GLUH', 'GLY', 'HIS', 'HISD', 'HISE', 'HISH', 'ILE', 'LEU', 'LYS',
@@ -38,8 +41,32 @@ class IReader(abc.ABC):
         return self._n_atoms
 
     @property
+    def atom_ids(self):
+        return self._atom_ids
+
+    @property
+    def atom_names(self):
+        return self._atom_names
+
+    @property
+    def atom_types(self):
+        return self._atom_types
+
+    @property
+    def residue_ids(self):
+        return self._residue_ids
+
+    @property
+    def residue_names(self):
+        return self._residue_names
+
+    @property
     def n_frames(self):
         return self._n_frames
+
+    @abc.abstractmethod
+    def parse_first_frame(self):
+        pass
 
     @abc.abstractmethod
     def read_frame(self, frame):
@@ -76,16 +103,13 @@ class IReader(abc.ABC):
 
     def guess_atom_types(self):
 
-        # Read the firts frame to fetch the residue and atom names
-        _, residue_names, _, atom_names, _ = self.read_frame(0)
-
         symbols = [at['symbol'].upper() for at in CHEMICAL_ELEMENTS['atoms'].values()]
 
-        atom_types = []
+        self._atom_types = []
         for i in range(self._n_atoms):
 
-            atom_name = atom_names[i]
-            residue_name = residue_names[i]
+            atom_name = self._atom_names[i]
+            residue_name = self._residue_names[i]
 
             # Remove the trailing and initial digits from the upperized atom names
             upper_atom_name = atom_name.upper()
@@ -100,7 +124,7 @@ class IReader(abc.ABC):
                 while True:
                     upper_atom_name = upper_atom_name[:start]
                     if upper_atom_name in symbols:
-                        atom_types.append(upper_atom_name.capitalize())
+                        self._atom_types.append(upper_atom_name.capitalize())
                         break
                     if start > len(atom_name):
                         raise ValueError('Unknown atom type: {}'.format(atom_name))
@@ -113,11 +137,32 @@ class IReader(abc.ABC):
                 while True:
                     upper_atom_name = upper_atom_name[:start]
                     if upper_atom_name in symbols:
-                        atom_types.append(upper_atom_name.capitalize())
+                        self._atom_types.append(upper_atom_name.capitalize())
                         break
                     # print(upper_atom_name)
                     if start == 0:
                         raise ValueError('Unknown atom type: {}'.format(atom_name))
                     start -= 1
 
-        return atom_types
+    def build_connectivity(self, frame):
+
+        # Read the first frame to fetch the residue and atom names
+        coords = self.read_frame(frame)
+
+        lower_bound = coords.min(axis=0)
+        lower_bound -= 1.0e-6
+
+        upper_bound = coords.max(axis=0)
+        upper_bound += 1.0e-6
+
+        cov_radii = [CHEMICAL_ELEMENTS['atoms'][at]['covalent_radius']
+                     for at in self._atom_types]
+
+        connectivity_builder = PyConnectivity(lower_bound, upper_bound, 0, 10, 18)
+
+        for index, xyz, radius in zip(range(self._n_atoms), coords, cov_radii):
+            connectivity_builder.add_point(index, xyz, radius)
+
+        bonds = connectivity_builder.find_collisions()
+
+        return bonds

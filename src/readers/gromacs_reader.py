@@ -26,26 +26,48 @@ class GromacsReader(IReader):
             print("Invalid type for number of atoms: must be an int")
             sys.exit(1)
 
-        coords = self._fin.readline()
-        self._coords_size = len(coords)
+        # coords = self._fin.readline()
+        # self._coords_size = len(coords)
 
-        self._frame_size = self._n_atoms*self._coords_size
+        # self._frame_size = self._n_atoms*self._coords_size
 
-        # Restart from the beginning of the file
-        self._fin.seek(0)
+        # # Restart from the beginning of the file
+        # self._fin.seek(0)
 
-        # Go the end of the coordinates block
-        self._fin.read(first_title_size + self._n_atoms_size + self._frame_size)
+        # # Go the end of the coordinates block
+        # self._fin.read(first_title_size + self._n_atoms_size + self._frame_size)
 
-        # Read the PBC line
-        pbc = self._fin.readline()
-        self._pbc_size = len(pbc)
+        # # Read the PBC line
+        # pbc = self._fin.readline()
+        # self._pbc_size = len(pbc)
+
+        # self._fin.seek(0)
+
+        # # Loop over the file to get the length of all title lines (:-( they change over the file)
+        # # Compute also the number of frames
+        # self._title_sizes = []
+        # self._n_frames = 0
+        # eof = False
+        # while True:
+        #     for i in range(self._n_atoms + 3):
+        #         line = self._fin.readline()
+        #         if not line:
+        #             eof = True
+        #             break
+        #         if i == 0:
+        #             self._title_sizes.append(len(line))
+
+        #     if eof:
+        #         break
+
+        #     self._n_frames += 1
 
         self._fin.seek(0)
 
         # Loop over the file to get the length of all title lines (:-( they change over the file)
         # Compute also the number of frames
-        self._title_sizes = []
+        self._pbc_starts = []
+        self._frame_starts = []
         self._n_frames = 0
         eof = False
         while True:
@@ -54,53 +76,67 @@ class GromacsReader(IReader):
                 if not line:
                     eof = True
                     break
-                if i == 0:
-                    self._title_sizes.append(len(line))
-
+                if i == 1:
+                    self._frame_starts.append(self._fin.tell())
+                elif i == self._n_atoms + 1:
+                    self._pbc_starts.append(self._fin.tell())
             if eof:
                 break
 
             self._n_frames += 1
 
-    def read_frame(self, frame):
+        self._fin.seek(self._frame_starts[0])
 
-        # Fold the frame
-        frame %= self._n_frames
+        self._coords_size = 45
 
-        # Rewind the file to the beginning
-        self._fin.seek(0)
+        self._frame_size = self._n_atoms*self._coords_size
 
-        title_sizes = sum(self._title_sizes[:frame+1])
+        self.parse_first_frame()
 
-        # Go to the beginning of the frame-th coordinates block
-        self._fin.seek(title_sizes + frame*(self._n_atoms_size +
-                                            self._frame_size + self._pbc_size) + self._n_atoms_size)
+    def parse_first_frame(self):
 
+        # Rewind the file to the beginning of the first frame
+        self._fin.seek(self._frame_starts[0])
         data = self._fin.read(self._frame_size)
 
-        residue_ids = []
-        residue_names = []
-        atom_names = []
-        atom_ids = []
-        coords = np.empty((self._n_atoms, 3), dtype=np.float)
+        self._atom_names = []
+        self._atom_ids = []
+        self._atom_types = []
+        self._residue_names = []
+        self._residue_ids = []
+
         for i in range(self._n_atoms):
             start = i*self._coords_size
             end = start + self._coords_size
-            coord = data[start:end]
-            residue_ids.append(int(coord[0:5]))
-            residue_names.append(coord[5:10].strip())
-            atom_names.append(coord[10:15].strip())
-            atom_ids.append(int(coord[15:20]))
+            line = data[start:end]
+            self._residue_ids.append(int(line[0:5]))
+            self._residue_names.append(line[5:10].strip())
+            self._atom_names.append(line[10:15].strip())
+            self._atom_ids.append(int(line[15:20]))
 
-            x = float(coord[20:28])
-            y = float(coord[28:36])
-            z = float(coord[36:44])
+        self.guess_atom_types()
+
+    def read_frame(self, frame):
+
+        # Rewind the file to the beginning of the frame
+        self._fin.seek(self._frame_starts[frame])
+
+        data = self._fin.read(self._frame_size)
+
+        coords = np.empty((self._n_atoms, 3), dtype=np.float)
+
+        for i in range(self._n_atoms):
+            start = i*self._coords_size
+            end = start + self._coords_size
+            line = data[start:end]
+            x = float(line[20:28])
+            y = float(line[28:36])
+            z = float(line[36:44])
             coords[i, :] = [x, y, z]
 
-        # Convert coords from nanometers to angstroms
-        coords *= 10
+        coords *= 10.0
 
-        return residue_ids, residue_names, atom_ids, atom_names, coords
+        return coords
 
     def read_pbc(self, frame):
 
