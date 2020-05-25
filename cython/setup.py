@@ -1,4 +1,3 @@
-import glob
 import os
 import sys
 
@@ -23,7 +22,4 @@ EXTENSIONS = [Extension('connectivity',
                         extra_link_args=["-std=c++11"]),
               ]
 
-setup(name="waterstay_extensions",
-      version="0.0.0",
-      ext_modules=EXTENSIONS,
-      cmdclass={'build_ext': build_ext})
+setup(ext_modules=EXTENSIONS, cmdclass={'build_ext': build_ext})

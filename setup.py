@@ -1,7 +1,14 @@
-from distutils.util import convert_path
-from distutils.core import setup
 import fnmatch
 import os
+import sys
+
+from distutils.util import convert_path
+from distutils.core import Extension, setup
+from distutils.sysconfig import get_config_vars
+
+from Cython.Distutils import build_ext as cython_build_ext
+
+import numpy as np
 
 
 def find_packages(path, base=None, exclude=None):
@@ -79,6 +86,26 @@ package = find_packages(path="src", base="waterstay")
 package_data = find_package_data(where='src', package='waterstay')
 
 #################################
+# Extensions section
+#################################
+
+INCLUDE_DIR = [np.get_include()]
+
+if 'linux' in sys.platform:
+    (opt,) = get_config_vars('OPT')
+    os.environ['OPT'] = " ".join(flag for flag in opt.split() if flag != '-Wstrict-prototypes')
+
+EXTENSIONS = [Extension('waterstay.extensions.connectivity',
+                        include_dirs=INCLUDE_DIR,
+                        sources=[os.path.join("cython", 'connectivity', 'connectivity.pyx')],
+                        language="c++",
+                        extra_compile_args=["-std=c++11"],
+                        extra_link_args=["-std=c++11"]),
+              ]
+
+CMDCLASS = {'build_ext': cython_build_ext}
+
+#################################
 # The setup section
 #################################
 
@@ -94,4 +121,6 @@ setup(name="waterstay",
       packages=package,
       package_data=package_data,
       package_dir={"waterstay": "src"},
+      ext_modules=EXTENSIONS,
+      cmdclass=CMDCLASS,
       platforms=['Unix', 'Windows'])
