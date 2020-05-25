@@ -195,7 +195,12 @@ class MainWindow(QtWidgets.QMainWindow):
             frame (int): the frame to read
         """
 
-        residue_ids, residue_names, atom_ids, atom_names, coords = reader.read_frame(frame)
+        residue_ids = reader.residue_ids
+        residue_names = reader.residue_names
+        atom_ids = reader.atom_ids
+        atom_names = reader.atom_names
+
+        coords = reader.read_frame(frame)
 
         n_atoms = reader.n_atoms
 

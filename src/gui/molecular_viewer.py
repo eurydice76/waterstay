@@ -191,7 +191,7 @@ class MolecularViewer(QtWidgets.QWidget):
 
         self._current_frame = frame % self._reader.n_frames
 
-        _, _, _, _, coords = self._reader.read_frame(self._current_frame)
+        coords = self._reader.read_frame(self._current_frame)
 
         points = vtk.vtkPoints()
         points.SetNumberOfPoints(self._n_atoms)
@@ -293,17 +293,17 @@ class MolecularViewer(QtWidgets.QWidget):
         self._n_atoms = self._reader.n_atoms
         self._n_frames = self._reader.n_frames
 
-        self._atoms = self._reader.guess_atom_types()
+        self._atoms = self._reader.atom_types
 
         # Hack for reducing objects resolution when the system is big
         self._resolution = int(np.sqrt(3000000.0 / self._n_atoms))
         self._resolution = 10 if self._resolution > 10 else self._resolution
         self._resolution = 4 if self._resolution < 4 else self._resolution
 
-        self._atom_colours, self._lut = self.build_color_transfert_function()
+        self._atom_colours, self._lut = self.build_color_transfer_function()
 
-        self._atom_scales = 10*np.array([CHEMICAL_ELEMENTS['atoms'][at]['vdw_radius']
-                                         for at in self._atoms]).astype(np.float32)
+        self._atom_scales = np.array([CHEMICAL_ELEMENTS['atoms'][at]['vdw_radius']
+                                      for at in self._atoms]).astype(np.float32)
 
         scalars = ndarray_to_vtkarray(self._atom_colours, self._atom_scales, self._n_atoms)
 
@@ -311,8 +311,20 @@ class MolecularViewer(QtWidgets.QWidget):
         self._polydata.GetPointData().SetScalars(scalars)
 
         self.set_coordinates(frame)
+        chemical_bonds = self._reader.build_connectivity(0)
 
-    def build_color_transfert_function(self):
+        vtk_bonds = vtk.vtkCellArray()
+        for at, bonded_ats in chemical_bonds.items():
+
+            for bonded_at in bonded_ats:
+                line = vtk.vtkLine()
+                line.GetPointIds().SetId(0, at)
+                line.GetPointIds().SetId(1, bonded_at)
+                vtk_bonds.InsertNextCell(line)
+
+        self._polydata.SetLines(vtk_bonds)
+
+    def build_color_transfer_function(self):
 
         lut = vtk.vtkColorTransferFunction()
 
