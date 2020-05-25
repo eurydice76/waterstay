@@ -1,0 +1,6 @@
+version 0.0.0
+--------------
+* ADDED GUI
+* ADDED Molecular viewer
+* ADDED Trajectory reader for PDB and Gro trajectories
+
