@@ -1,7 +1,7 @@
 import numpy as np
 
-from .i_reader import IReader
-from .reader_registry import register_reader
+from waterstay.readers.i_reader import IReader
+from waterstay.readers.reader_registry import register_reader
 
 
 @register_reader('.pdb')
@@ -54,6 +54,8 @@ class PDBReader(IReader):
         self.parse_first_frame()
 
     def parse_first_frame(self):
+        """Parse the first frame to get resp. the residue ids and names and the atoms ids and names.
+        """
 
         # Rewind the file to the beginning of the first frame
         self._fin.seek(self._frame_starts[0])
@@ -77,6 +79,11 @@ class PDBReader(IReader):
         self.guess_atom_types()
 
     def read_frame(self, frame):
+        """Read the coordinates at a given frame.
+
+        Args:
+            frame (int): the selected frame
+        """
 
         # Rewind the file to the beginning of the frame
         self._fin.seek(self._frame_starts[frame])
@@ -97,6 +104,11 @@ class PDBReader(IReader):
         return coords
 
     def read_pbc(self, frame):
+        """Read the bounding box at a given frame.
+
+        Args:
+            frame (int): the selected frame
+        """
 
         # Fold the frame
         frame %= self._n_frames

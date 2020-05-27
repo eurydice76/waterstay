@@ -12,15 +12,27 @@ RGB_COLOURS["selection"] = (0, (1.00, 0.20, 1.00))
 RGB_COLOURS["default"] = (1, (1.00, 0.90, 0.90))
 
 
-def color_string_to_rgb(s):
+def color_string_to_rgb(color):
+    """Convert a color stroed in r;g;b format to [r/255.0,g/255.0,b/255.0] format.
 
-    if not s.strip():
-        s = "1;1;1"
+    Args:
+        color (str): the color to convert
+    """
 
-    return np.array(s.split(';')).astype(np.float32)/255.
+    if not color.strip():
+        color = "1;1;1"
+
+    return np.array(color.split(';')).astype(np.float32)/255.
 
 
-def ndarray_to_vtkarray(colors, radius, n_atoms):
+def ndarray_to_vtkarray(colors, scales, n_atoms):
+    """Convert the colors and scales NumPy arrays to vtk arrays.
+
+    Args:
+        colors (numpy.array): the colors
+        scales (numpy.array): the scales
+        n_atoms (int): the number of atoms
+    """
     # define the colours
     color_scalars = vtk.vtkFloatArray()
     color_scalars.SetNumberOfValues(len(colors))
@@ -28,12 +40,12 @@ def ndarray_to_vtkarray(colors, radius, n_atoms):
         color_scalars.SetValue(i, c)
     color_scalars.SetName("colors")
 
-    # some radii
-    radius_scalars = vtk.vtkFloatArray()
-    radius_scalars.SetNumberOfValues(radius.shape[0])
-    for i, r in enumerate(radius):
-        radius_scalars.SetValue(i, r)
-    radius_scalars.SetName("radius")
+    # some scales
+    scales_scalars = vtk.vtkFloatArray()
+    scales_scalars.SetNumberOfValues(scales.shape[0])
+    for i, r in enumerate(scales):
+        scales_scalars.SetValue(i, r)
+    scales_scalars.SetName("scales")
 
     # the original index
     index_scalars = vtk.vtkIntArray()
@@ -44,26 +56,17 @@ def ndarray_to_vtkarray(colors, radius, n_atoms):
 
     scalars = vtk.vtkFloatArray()
     scalars.SetNumberOfComponents(3)
-    scalars.SetNumberOfTuples(radius_scalars.GetNumberOfTuples())
-    scalars.CopyComponent(0, radius_scalars, 0)
+    scalars.SetNumberOfTuples(scales_scalars.GetNumberOfTuples())
+    scalars.CopyComponent(0, scales_scalars, 0)
     scalars.CopyComponent(1, color_scalars, 0)
     scalars.CopyComponent(2, index_scalars, 0)
     scalars.SetName("scalars")
     return scalars
 
 
-def ndarray_to_vtkcellarray(array):
-    bonds = vtk.vtkCellArray()
-    for data in array:
-        line = vtk.vtkLine()
-        line.GetPointIds().SetId(0, int(data[0]))
-        line.GetPointIds().SetId(1, int(data[1]))
-        bonds.InsertNextCell(line)
-
-    return bonds
-
-
 class MolecularViewer(QtWidgets.QWidget):
+    """This class implements a molecular viewer.
+    """
 
     picked_atom_changed = QtCore.pyqtSignal(int)
 
@@ -122,15 +125,132 @@ class MolecularViewer(QtWidgets.QWidget):
     def renderer(self):
         return self._renderer
 
+    def build_color_transfer_function(self):
+        """Returns the colors and their associated transfer function
+        """
+
+        lut = vtk.vtkColorTransferFunction()
+
+        for (idx, color) in RGB_COLOURS.values():
+            lut.AddRGBPoint(idx, *color)
+
+        colours = []
+        unic_colours = {}
+
+        color_string_list = [color_string_to_rgb(
+            CHEMICAL_ELEMENTS['atoms'][at]['color']) for at in self._atoms]
+
+        col_ids = len(RGB_COLOURS)
+
+        for col in color_string_list:
+            tup_col = tuple(col)
+            if not (tup_col in unic_colours.keys()):
+                unic_colours[tup_col] = col_ids
+                lut.AddRGBPoint(col_ids, *tup_col)
+                colours.append(col_ids)
+                col_ids += 1
+            else:
+                colours.append(unic_colours[tup_col])
+
+        return colours, lut
+
+    def build_scene(self):
+        '''
+        build a vtkPolyData object for a given frame of the trajectory
+        '''
+
+        actor_list = []
+        line_actor = None
+
+        line_mapper = vtk.vtkPolyDataMapper()
+        if vtk.vtkVersion.GetVTKMajorVersion() < 6:
+            line_mapper.SetInput(self._polydata)
+        else:
+            line_mapper.SetInputData(self._polydata)
+
+        line_mapper.SetLookupTable(self._lut)
+        line_mapper.ScalarVisibilityOn()
+        line_mapper.ColorByArrayComponent("scalars", 1)
+        line_actor = vtk.vtkLODActor()
+        line_actor.GetProperty().SetLineWidth(3)
+        line_actor.SetMapper(line_mapper)
+        actor_list.append(line_actor)
+
+        sphere = vtk.vtkSphereSource()
+        sphere.SetCenter(0, 0, 0)
+        sphere.SetRadius(0.2)
+        sphere.SetThetaResolution(self._resolution)
+        sphere.SetPhiResolution(self._resolution)
+        glyph = vtk.vtkGlyph3D()
+        if vtk.vtkVersion.GetVTKMajorVersion() < 6:
+            glyph.SetInput(self._polydata)
+        else:
+            glyph.SetInputData(self._polydata)
+
+        glyph.SetScaleModeToScaleByScalar()
+        glyph.SetColorModeToColorByScalar()
+        glyph.SetScaleFactor(1)
+        glyph.SetSourceConnection(sphere.GetOutputPort())
+        glyph.SetIndexModeToScalar()
+        sphere_mapper = vtk.vtkPolyDataMapper()
+        sphere_mapper.SetLookupTable(self._lut)
+        sphere_mapper.SetScalarRange(self._polydata.GetScalarRange())
+        sphere_mapper.SetInputConnection(glyph.GetOutputPort())
+        sphere_mapper.ScalarVisibilityOn()
+        sphere_mapper.ColorByArrayComponent("scalars", 1)
+        ball_actor = vtk.vtkLODActor()
+        ball_actor.SetMapper(sphere_mapper)
+        ball_actor.GetProperty().SetAmbient(0.2)
+        ball_actor.GetProperty().SetDiffuse(0.5)
+        ball_actor.GetProperty().SetSpecular(0.3)
+        ball_actor.SetNumberOfCloudPoints(30000)
+        actor_list.append(ball_actor)
+        self.glyph = glyph
+
+        self._picking_domain = ball_actor
+
+        assembly = vtk.vtkAssembly()
+        for actor in actor_list:
+            assembly.AddPart(actor)
+
+        return assembly
+
+    def clear_trajectory(self):
+        """Clear the trajectory and the vtk scene.
+        """
+
+        if not hasattr(self, "_actors"):
+            return
+
+        self._actors.VisibilityOff()
+        self._actors.ReleaseGraphicsResources(self.get_render_window())
+        self._renderer.RemoveActor(self._actors)
+
+        del self._actors
+
+        self._reader = None
+
     def enable_picking(self):
+        """Enables the picking of vtk object stored in the scene.
+        """
 
         self._picker_observer_id = self._iren.AddObserver("LeftButtonPressEvent", self.on_pick)
 
     def get_atom_index(self, pid):
+        """Return the atom index from the vtk data point index.
+
+        Args:
+            pid (int): the data point index
+        """
 
         _, _, idx = self.glyph.GetOutput().GetPointData().GetArray("scalars").GetTuple3(pid)
 
         return int(idx)
+
+    def get_render_window(self):
+        """Returns the render window.
+        """
+        return self._iren.GetRenderWindow()
 
     def on_pick(self, obj, event=None):
         """Event handler when an atom is mouse-picked
@@ -204,84 +324,13 @@ class MolecularViewer(QtWidgets.QWidget):
         # Update the view.
         self.update_renderer()
 
-    def build_scene(self):
-        '''
-        build a vtkPolyData object for a given frame of the trajectory
-        '''
-
-        actor_list = []
-        line_actor = None
-
-        line_mapper = vtk.vtkPolyDataMapper()
-        if vtk.vtkVersion.GetVTKMajorVersion() < 6:
-            line_mapper.SetInput(self._polydata)
-        else:
-            line_mapper.SetInputData(self._polydata)
-
-        line_mapper.SetLookupTable(self._lut)
-        line_mapper.ScalarVisibilityOn()
-        line_mapper.ColorByArrayComponent("scalars", 1)
-        line_actor = vtk.vtkLODActor()
-        line_actor.GetProperty().SetLineWidth(3)
-        line_actor.SetMapper(line_mapper)
-        actor_list.append(line_actor)
-
-        sphere = vtk.vtkSphereSource()
-        sphere.SetCenter(0, 0, 0)
-        sphere.SetRadius(0.2)
-        sphere.SetThetaResolution(self._resolution)
-        sphere.SetPhiResolution(self._resolution)
-        glyph = vtk.vtkGlyph3D()
-        if vtk.vtkVersion.GetVTKMajorVersion() < 6:
-            glyph.SetInput(self._polydata)
-        else:
-            glyph.SetInputData(self._polydata)
-
-        glyph.SetScaleModeToScaleByScalar()
-        glyph.SetColorModeToColorByScalar()
-        glyph.SetScaleFactor(1)
-        glyph.SetSourceConnection(sphere.GetOutputPort())
-        glyph.SetIndexModeToScalar()
-        sphere_mapper = vtk.vtkPolyDataMapper()
-        sphere_mapper.SetLookupTable(self._lut)
-        sphere_mapper.SetScalarRange(self._polydata.GetScalarRange())
-        sphere_mapper.SetInputConnection(glyph.GetOutputPort())
-        sphere_mapper.ScalarVisibilityOn()
-        sphere_mapper.ColorByArrayComponent("scalars", 1)
-        ball_actor = vtk.vtkLODActor()
-        ball_actor.SetMapper(sphere_mapper)
-        ball_actor.GetProperty().SetAmbient(0.2)
-        ball_actor.GetProperty().SetDiffuse(0.5)
-        ball_actor.GetProperty().SetSpecular(0.3)
-        ball_actor.SetNumberOfCloudPoints(30000)
-        actor_list.append(ball_actor)
-        self.glyph = glyph
-
-        self._picking_domain = ball_actor
-
-        assembly = vtk.vtkAssembly()
-        for actor in actor_list:
-            assembly.AddPart(actor)
-
-        return assembly
-
-    def update_renderer(self):
-        '''
-        Update the renderer
-        '''
-        # deleting old frame
-        self.clear_trajectory()
-
-        # creating new polydata
-        self._actors = self.build_scene()
-
-        # adding polydata to renderer
-        self._renderer.AddActor(self._actors)
-
-        # rendering
-        self._iren.Render()
-
     def set_reader(self, reader, frame=0):
+        """Set the trajectory at a given frame
+
+        Args:
+            reader (IReader): the trajectory object
+            frame (int): the selected frame
+        """
 
         if (self._reader is not None) and (reader.filename == self._reader.filename):
             return
@@ -324,43 +373,18 @@ class MolecularViewer(QtWidgets.QWidget):
 
         self._polydata.SetLines(vtk_bonds)
 
-    def build_color_transfer_function(self):
+    def update_renderer(self):
+        '''
+        Update the renderer
+        '''
+        # deleting old frame
+        self.clear_trajectory()
 
-        lut = vtk.vtkColorTransferFunction()
+        # creating new polydata
+        self._actors = self.build_scene()
 
-        for (idx, color) in RGB_COLOURS.values():
-            lut.AddRGBPoint(idx, *color)
+        # adding polydata to renderer
+        self._renderer.AddActor(self._actors)
 
-        colours = []
-        unic_colours = {}
-
-        color_string_list = [color_string_to_rgb(
-            CHEMICAL_ELEMENTS['atoms'][at]['color']) for at in self._atoms]
-
-        col_ids = len(RGB_COLOURS)
-
-        for col in color_string_list:
-            tup_col = tuple(col)
-            if not (tup_col in unic_colours.keys()):
-                unic_colours[tup_col] = col_ids
-                lut.AddRGBPoint(col_ids, *tup_col)
-                colours.append(col_ids)
-                col_ids += 1
-            else:
-                colours.append(unic_colours[tup_col])
-
-        return colours, lut
-
-    def get_render_window(self):
-        return self._iren.GetRenderWindow()
-
-    def clear_trajectory(self):
-
-        if not hasattr(self, "_actors"):
-            return
-
-        self._actors.VisibilityOff()
-        self._actors.ReleaseGraphicsResources(self.get_render_window())
-        self._renderer.RemoveActor(self._actors)
-
-        del self._actors
+        # rendering
+        self._iren.Render()

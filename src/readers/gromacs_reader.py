@@ -2,8 +2,8 @@ import sys
 
 import numpy as np
 
-from .i_reader import IReader
-from .reader_registry import register_reader
+from waterstay.readers.i_reader import IReader
+from waterstay.readers.reader_registry import register_reader
 
 
 @register_reader('.gro')
@@ -25,42 +25,6 @@ class GromacsReader(IReader):
         except ValueError:
             print("Invalid type for number of atoms: must be an int")
             sys.exit(1)
-
-        # coords = self._fin.readline()
-        # self._coords_size = len(coords)
-
-        # self._frame_size = self._n_atoms*self._coords_size
-
-        # # Restart from the beginning of the file
-        # self._fin.seek(0)
-
-        # # Go the end of the coordinates block
-        # self._fin.read(first_title_size + self._n_atoms_size + self._frame_size)
-
-        # # Read the PBC line
-        # pbc = self._fin.readline()
-        # self._pbc_size = len(pbc)
-
-        # self._fin.seek(0)
-
-        # # Loop over the file to get the length of all title lines (:-( they change over the file)
-        # # Compute also the number of frames
-        # self._title_sizes = []
-        # self._n_frames = 0
-        # eof = False
-        # while True:
-        #     for i in range(self._n_atoms + 3):
-        #         line = self._fin.readline()
-        #         if not line:
-        #             eof = True
-        #             break
-        #         if i == 0:
-        #             self._title_sizes.append(len(line))
-
-        #     if eof:
-        #         break
-
-        #     self._n_frames += 1
 
         self._fin.seek(0)
 
@@ -94,6 +58,8 @@ class GromacsReader(IReader):
         self.parse_first_frame()
 
     def parse_first_frame(self):
+        """Parse the first frame to get resp. the residue ids and names and the atoms ids and names.
+        """
 
         # Rewind the file to the beginning of the first frame
         self._fin.seek(self._frame_starts[0])
@@ -117,6 +83,11 @@ class GromacsReader(IReader):
         self.guess_atom_types()
 
     def read_frame(self, frame):
+        """Read the coordinates at a given frame.
+
+        Args:
+            frame (int): the selected frame
+        """
 
         # Rewind the file to the beginning of the frame
         self._fin.seek(self._frame_starts[frame])
@@ -139,6 +110,11 @@ class GromacsReader(IReader):
         return coords
 
     def read_pbc(self, frame):
+        """Read the bounding box at a given frame.
+
+        Args:
+            frame (int): the selected frame
+        """
 
         # Fold the frame
         frame %= self._n_frames

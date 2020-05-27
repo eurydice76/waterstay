@@ -74,39 +74,50 @@ class IReader(abc.ABC):
     def read_pbc(self, frame):
         pass
 
-    def get_mol_indexes(self, target_mol, target_atoms):
-        """Return the nested list of the indexes matching a molecule name and target atoms
+    def build_connectivity(self, frame):
+        """Build the connectivity for the whole system at a given frame.
 
         Args:
-            target_mol (str): the target molecule
-            target_atoms (list): the list of target atoms (str)
+            frame (int): the selected frame
         """
 
-        indexes = []
+        # Read the first frame to fetch the residue and atom names
+        coords = self.read_frame(frame)
 
-        current_mol_index = None
-        for i, resname in enumerate(self._residue_names):
-            if resname != target_mol:
-                continue
+        # Compute the bounding box of the system
+        lower_bound = coords.min(axis=0)
+        upper_bound = coords.max(axis=0)
 
-            mol_index = self._residue_ids[i]
-            if mol_index != current_mol_index:
-                if current_mol_index is not None:
-                    indexes.append(new_mol)
-                if self._atom_names[i] in target_atoms:
-                    new_mol = [i]
-                current_mol_index = mol_index
-            else:
-                if self._atom_names[i] in target_atoms:
-                    new_mol.append(i)
+        # Enlarge it a bit to not miss any atom
+        lower_bound -= 1.0e-6
+        upper_bound += 1.0e-6
 
-        if new_mol:
-            indexes.append(new_mol)
+        # Fetch the covalent radii from the database
+        cov_radii = [CHEMICAL_ELEMENTS['atoms'][at]['covalent_radius'] for at in self._atom_types]
 
-        return indexes
+        # Initializes the octree used to build the connectivity
+        connectivity_builder = PyConnectivity(lower_bound, upper_bound, 0, 10, 18)
+
+        # Add the points to the octree
+        for index, xyz, radius in zip(range(self._n_atoms), coords, cov_radii):
+            connectivity_builder.add_point(index, xyz, radius)
+
+        # Compute the collisions
+        bonds = connectivity_builder.find_collisions(1.0e-1)
+
+        return bonds
 
     def guess_atom_types(self):
+        """Guess the atom type (element) from their atom names.
 
+        For standard residues, the strategy is to start from the left and search 
+        by increasing length until a valid element is found.
+        For unknown residue, the strategy is opposite. Indeed, we start from the 
+        right and search by decreasing length until a valid element is found. 
+        The elemenents are searched in an internal YAML database.
+        """
+
+        # Retrieve all the chemical symbols from the internal database
         symbols = [at['symbol'].upper() for at in CHEMICAL_ELEMENTS['atoms'].values()]
 
         self._atom_types = []
@@ -148,38 +159,36 @@ class IReader(abc.ABC):
                         raise ValueError('Unknown atom type: {}'.format(atom_name))
                     start -= 1
 
-    def build_connectivity(self, frame):
-        """Build the connectivity for the whole system at a given frame.
+    def get_mol_indexes(self, target_mol, target_atoms):
+        """Return the nested list of the indexes matching a molecule name and target atoms
 
         Args:
-            frame (int): the selected frame
+            target_mol (str): the target molecule
+            target_atoms (list): the list of target atoms (str)
         """
 
-        # Read the first frame to fetch the residue and atom names
-        coords = self.read_frame(frame)
+        indexes = []
 
-        # Compute the bounding box of the system
-        lower_bound = coords.min(axis=0)
-        upper_bound = coords.max(axis=0)
+        current_mol_index = None
+        for i, resname in enumerate(self._residue_names):
+            if resname != target_mol:
+                continue
 
-        # Enlarge it a bit to not miss any atom
-        lower_bound -= 1.0e-6
-        upper_bound += 1.0e-6
+            mol_index = self._residue_ids[i]
+            if mol_index != current_mol_index:
+                if current_mol_index is not None:
+                    indexes.append(new_mol)
+                if self._atom_names[i] in target_atoms:
+                    new_mol = [i]
+                current_mol_index = mol_index
+            else:
+                if self._atom_names[i] in target_atoms:
+                    new_mol.append(i)
 
-        # Fetch the covalent radii from the database
-        cov_radii = [CHEMICAL_ELEMENTS['atoms'][at]['covalent_radius'] for at in self._atom_types]
+        if new_mol:
+            indexes.append(new_mol)
 
-        # Initializes the octree used to build the connectivity
-        connectivity_builder = PyConnectivity(lower_bound, upper_bound, 0, 10, 18)
-
-        # Add the points to the octree
-        for index, xyz, radius in zip(range(self._n_atoms), coords, cov_radii):
-            connectivity_builder.add_point(index, xyz, radius)
-
-        # Compute the collisions
-        bonds = connectivity_builder.find_collisions(1.0e-1)
-
-        return bonds
+        return indexes
 
     def mol_in_shell(self, mol_name, target_atoms, center, radius):
         """Compute the residence time of molecules of a given type which are within a shell around an atomic center.
