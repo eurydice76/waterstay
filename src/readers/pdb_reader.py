@@ -133,7 +133,4 @@ class PDBReader(IReader):
         pbc[2, 1] = c*fact
         pbc[2, 2] = c*np.sqrt(1.0 - cos_beta*cos_beta - fact*fact)
 
-        # Convert from angstroms to nanometers
-        pbc *= 0.1
-
         return pbc

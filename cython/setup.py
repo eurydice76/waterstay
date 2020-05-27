@@ -20,6 +20,8 @@ EXTENSIONS = [Extension('connectivity',
                         language="c++",
                         extra_compile_args=["-std=c++11"],
                         extra_link_args=["-std=c++11"]),
-              ]
+              Extension('atoms_in_shell',
+                        include_dirs=INCLUDE_DIR,
+                        sources=["atoms_in_shell/atoms_in_shell.pyx"])]
 
 setup(ext_modules=EXTENSIONS, cmdclass={'build_ext': build_ext})

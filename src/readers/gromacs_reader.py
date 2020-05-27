@@ -170,4 +170,6 @@ class GromacsReader(IReader):
         else:
             raise ValueError("Invalid PBC line")
 
+        pbc *= 10.0
+
         return pbc

@@ -1,6 +1,8 @@
 import os
 import sys
 
+import numpy as np
+
 from PyQt5.QtCore import Qt
 from PyQt5 import QtCore, QtGui, QtWidgets
 
@@ -8,8 +10,10 @@ import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 from waterstay.__pkginfo__ import __version__
+from waterstay.database import CHEMICAL_ELEMENTS
 from waterstay.readers.reader_registry import REGISTERED_READERS
 from waterstay.gui.molecular_viewer import MolecularViewer
+from waterstay.gui.residence_times_dialog import ResidenceTimesDialog
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -22,6 +26,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.init_ui()
 
     def init_ui(self):
+        """Set the widgets of the main window
+        """
+
+        self._reader = None
 
         self.build_menu()
 
@@ -33,18 +41,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.build_layout()
 
-        self._molecular_viewer.renderer.ResetCamera()
+        self.build_events()
 
-        self._main_frame.setLayout(self._vl)
-        self.setCentralWidget(self._main_frame)
-
-        self.setGeometry(0, 0, 800, 800)
-
-        self.show()
-
-        self._molecular_viewer.iren.Initialize()
-
-        self._molecular_viewer.iren.Start()
+    def build_events(self):
+        """Set the signal:slots of the main window
+        """
 
         # Signals/slots
         self._atoms_table.verticalHeader().sectionClicked.connect(self.on_row_select)
@@ -53,6 +54,47 @@ class MainWindow(QtWidgets.QMainWindow):
         self._frame_spinbox.valueChanged.connect(self.on_change_frame)
         self.selected_atom_changed.connect(self._molecular_viewer.on_pick_atom)
         self._molecular_viewer.picked_atom_changed.connect(self.on_pick_atom)
+        self._run.clicked.connect(self.run)
+
+    def run(self):
+        """Run the application
+        """
+
+        if self._reader is None:
+            return
+
+        target_mol_name = self._target_mol_name.text().strip()
+
+        if not target_mol_name:
+            error_message = QtWidgets.QMessageBox()
+            error_message.setIcon(QtWidgets.QMessageBox.Warning)
+            error_message.setText('Empty molecule name')
+            error_message.exec()
+            return
+
+        shell_radius = self._shell_radius.value()
+        if shell_radius <= 0.0:
+            error_message = QtWidgets.QMessageBox()
+            error_message.setIcon(QtWidgets.QMessageBox.Warning)
+            error_message.setText('The shell radius must be strictly positive')
+            error_message.exec()
+            return
+
+        center_atom_index = self._atoms_table.currentRow()
+        if center_atom_index == -1:
+            error_message = QtWidgets.QMessageBox()
+            error_message.setIcon(QtWidgets.QMessageBox.Warning)
+            error_message.setText('No atomic center selected')
+            error_message.exec()
+            return
+
+        mol_ids, residence_times = self._reader.mol_in_shell(
+            target_mol_name, center_atom_index, shell_radius)
+
+        dlg = ResidenceTimesDialog(residence_times, mol_ids, self._reader, self)
+        dlg.setWindowTitle('residence times of {} within {} of atom {}'.format(
+            target_mol_name, shell_radius, center_atom_index))
+        dlg.show()
 
     def on_change_frame(self, frame):
         """Event handler when a new frame is selected from the frame slider of the frame spinbox
@@ -98,9 +140,36 @@ class MainWindow(QtWidgets.QMainWindow):
             ['residue name', 'residue id', 'atom name', 'atom id', 'x', 'y', 'z'])
 
         self._molecular_viewer = MolecularViewer(self._main_frame)
+        self._molecular_viewer.renderer.ResetCamera()
+
+        self._molecular_viewer.iren.Initialize()
+
+        self._molecular_viewer.iren.Start()
 
         self._frame_slider = QtWidgets.QSlider(Qt.Horizontal)
         self._frame_spinbox = QtWidgets.QSpinBox()
+
+        self._target_mol_name_label = QtWidgets.QLabel()
+        self._target_mol_name_label.setText('Target molecule name')
+
+        self._target_mol_name = QtWidgets.QLineEdit()
+        self._target_mol_name.setText('SOL')
+
+        self._shell_radius_label = QtWidgets.QLabel()
+        self._shell_radius_label.setText('Shell radius (A)')
+
+        self._shell_radius = QtWidgets.QDoubleSpinBox()
+        self._shell_radius.setMinimum(0.0)
+        self._shell_radius.setValue(5)
+
+        self._run = QtWidgets.QPushButton()
+        self._run.setText('Run')
+
+        self.setCentralWidget(self._main_frame)
+
+        self.setGeometry(0, 0, 800, 800)
+
+        self.show()
 
     def build_layout(self):
         """Build the layout of the main window.
@@ -109,12 +178,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self._vl = QtWidgets.QVBoxLayout()
         self._vl.addWidget(self._molecular_viewer.iren)
 
-        hl = QtWidgets.QHBoxLayout()
-        hl.addWidget(self._frame_slider)
-        hl.addWidget(self._frame_spinbox)
+        frame_hl = QtWidgets.QHBoxLayout()
+        frame_hl.addWidget(self._frame_slider)
+        frame_hl.addWidget(self._frame_spinbox)
+        self._vl.addLayout(frame_hl)
 
-        self._vl.addLayout(hl)
         self._vl.addWidget(self._atoms_table)
+
+        run_hl = QtWidgets.QHBoxLayout()
+        run_hl.addWidget(self._target_mol_name_label)
+        run_hl.addWidget(self._target_mol_name)
+        run_hl.addWidget(self._shell_radius_label)
+        run_hl.addWidget(self._shell_radius)
+        run_hl.addWidget(self._run)
+        self._vl.addLayout(run_hl)
+
+        self._main_frame.setLayout(self._vl)
 
     def on_row_select(self, row_index):
         """Event handler called when an entire row of the atoms table is selected.
@@ -166,22 +245,22 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Take the trajectory reader corresponding to the selected trajectory based on the trajectory file extension
         _, ext = os.path.splitext(trajectory_file)
-        reader = REGISTERED_READERS[ext](trajectory_file)
+        self._reader = REGISTERED_READERS[ext](trajectory_file)
 
         # Update the atoms table
-        self.fill_atoms_table(reader, 0)
+        self.fill_atoms_table(self._reader, 0)
 
         # Update the molecular viewer
-        self._molecular_viewer.set_reader(reader)
+        self._molecular_viewer.set_reader(self._reader)
 
         # Update the frame slider
         self._frame_slider.setMinimum(0)
-        self._frame_slider.setMaximum(reader.n_frames-1)
+        self._frame_slider.setMaximum(self._reader.n_frames-1)
         self._frame_slider.setValue(0)
 
         # Updathe the frame editor
         self._frame_spinbox.setMinimum(0)
-        self._frame_spinbox.setMaximum(reader.n_frames-1)
+        self._frame_spinbox.setMaximum(self._reader.n_frames-1)
         self._frame_spinbox.setValue(0)
 
         # Update the status bar

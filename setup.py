@@ -101,7 +101,9 @@ EXTENSIONS = [Extension('waterstay.extensions.connectivity',
                         language="c++",
                         extra_compile_args=["-std=c++11"],
                         extra_link_args=["-std=c++11"]),
-              ]
+              Extension('waterstay.extensions.atoms_in_shell',
+                        include_dirs=INCLUDE_DIR,
+                        sources=[os.path.join("cython", 'atoms_in_shell', 'atoms_in_shell.pyx')])]
 
 CMDCLASS = {'build_ext': cython_build_ext}
 

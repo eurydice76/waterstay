@@ -1,13 +1,11 @@
 import abc
 import os
-import yaml
 
 import numpy as np
 
-import waterstay
-
 from waterstay.database import CHEMICAL_ELEMENTS
 from waterstay.extensions.connectivity import PyConnectivity
+from waterstay.extensions.atoms_in_shell import atoms_in_shell
 
 STANDARD_RESIDUES = ['AIB', 'ALA', 'ARG', 'ARGN', 'ASN', 'ASP', 'ASPH', 'CYS', 'CYS2', 'CYSH', 'CYX',
                      'GLN', 'GLU', 'GLUH', 'GLY', 'HIS', 'HISD', 'HISE', 'HISH', 'ILE', 'LEU', 'LYS',
@@ -76,18 +74,16 @@ class IReader(abc.ABC):
     def read_pbc(self, frame):
         pass
 
-    def get_water_indexes(self, watername="SOL"):
+    def get_mol_indexes(self, mol_name="SOL"):
 
         indexes = []
 
-        resids, resnames, _, _, _ = self.read_frame(0)
-
         current_mol_index = None
-        for i, resname in enumerate(resnames):
-            if resname != watername:
+        for i, resname in enumerate(self._residue_names):
+            if resname != mol_name:
                 continue
 
-            mol_index = resids[i]
+            mol_index = self._residue_ids[i]
             if mol_index != current_mol_index:
                 if current_mol_index is not None:
                     indexes.append(new_mol)
@@ -145,24 +141,69 @@ class IReader(abc.ABC):
                     start -= 1
 
     def build_connectivity(self, frame):
+        """Build the connectivity for the whole system at a given frame.
+
+        Args:
+            frame (int): the selected frame
+        """
 
         # Read the first frame to fetch the residue and atom names
         coords = self.read_frame(frame)
 
+        # Compute the bounding box of the system
         lower_bound = coords.min(axis=0)
-        lower_bound -= 1.0e-6
-
         upper_bound = coords.max(axis=0)
+
+        # Enlarge it a bit to not miss any atom
+        lower_bound -= 1.0e-6
         upper_bound += 1.0e-6
 
-        cov_radii = [CHEMICAL_ELEMENTS['atoms'][at]['covalent_radius']
-                     for at in self._atom_types]
+        # Fetch the covalent radii from the database
+        cov_radii = [CHEMICAL_ELEMENTS['atoms'][at]['covalent_radius'] for at in self._atom_types]
 
+        # Initializes the octree used to build the connectivity
         connectivity_builder = PyConnectivity(lower_bound, upper_bound, 0, 10, 18)
 
+        # Add the points to the octree
         for index, xyz, radius in zip(range(self._n_atoms), coords, cov_radii):
             connectivity_builder.add_point(index, xyz, radius)
 
-        bonds = connectivity_builder.find_collisions()
+        # Compute the collisions
+        bonds = connectivity_builder.find_collisions(1.0e-1)
 
         return bonds
+
+    def mol_in_shell(self, mol_name, center, radius):
+        """Compute the residence time of molecules of a given type which are within a shell around an atomic center.
+
+        Args:
+            mol_name (str): the type of the molecules to scan
+            center (int): the index of the atomic center
+            radius (float): the radius to scan around the atomic center
+        """
+
+        # Retrieve the indexes of the atoms which belongs to each molecule of the selected type
+        target_mol_indexes = self.get_mol_indexes(mol_name)
+
+        # Initialize the output array
+        mol_residence_times = np.zeros((len(target_mol_indexes), self._n_frames), dtype=np.int32)
+
+        # Loop over the frame of the trajectory
+        for frame in range(self._n_frames):
+
+            # Read the frame at time=frame
+            coords = self.read_frame(frame)
+
+            # Read the direct cell at time=frame
+            cell = self.read_pbc(frame)
+
+            # Compute the reverse cell at time=frame
+            rcell = np.linalg.inv(cell)
+
+            # Scan for the molecules of the selected type which are found around the atomic center by the selected radius
+            atoms_in_shell(coords, cell, rcell, target_mol_indexes,
+                           center, radius, mol_residence_times[:, frame])
+
+            mol_ids = [self._residue_ids[v[0]] for v in target_mol_indexes]
+
+        return mol_ids, mol_residence_times
