@@ -173,12 +173,12 @@ namespace Geometry
             collisions.emplace(v, std::set<int>());
     }
 
-    void ConnectivityOctree::getCollisions(std::map<int, std::set<int>> &collisions) const
+    void ConnectivityOctree::getCollisions(std::map<int, std::set<int>> &collisions, double tolerance) const
     {
         if (hasChildren())
         {
             for (const auto &child : _children)
-                child.getCollisions(collisions);
+                child.getCollisions(collisions, tolerance);
         }
         else
         {
@@ -201,7 +201,7 @@ namespace Geometry
                     }
 
                     auto squaredDist = (datai.point - dataj.point).squaredNorm();
-                    auto bond = (datai.radius + dataj.radius + 1.0e-1);
+                    auto bond = (datai.radius + dataj.radius + tolerance);
                     auto squaredBond = bond * bond;
                     if (squaredDist <= squaredBond)
                     {
@@ -221,9 +221,9 @@ namespace Geometry
         }
     }
 
-    void ConnectivityOctree::findCollisions(std::map<int, std::set<int>> &collisions) const
+    void ConnectivityOctree::findCollisions(std::map<int, std::set<int>> &collisions, double tolerance) const
     {
-        getCollisions(collisions);
+        getCollisions(collisions, tolerance);
         addIsolatedAtoms(collisions);
     }
 

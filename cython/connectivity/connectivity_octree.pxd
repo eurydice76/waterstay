@@ -12,4 +12,4 @@ cdef extern from "connectivity_octree.h" namespace "Geometry":
         ConnectivityOctree()
         ConnectivityOctree(const Vector3d&, const Vector3d&, int, int, int) except +
         bool addPoint(int index, const Vector3d& point, double radius)
-        void findCollisions(map[int,set[int]]& collisions)
+        void findCollisions(map[int,set[int]]& collisions, double tolerance)

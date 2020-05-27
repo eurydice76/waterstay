@@ -23,8 +23,8 @@ cdef class PyConnectivity:
         cdef Vector3d point = Vector3d(pt[0],pt[1],pt[2])
         return self.c_octree.addPoint(index,point,radius)
 
-    def find_collisions(self):
+    def find_collisions(self, tolerance):
         cdef map[int,set[int]] collisions
-        self.c_octree.findCollisions(collisions)
+        self.c_octree.findCollisions(collisions, tolerance)
         return collisions
 

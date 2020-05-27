@@ -30,7 +30,7 @@ namespace Geometry
 
         bool addPoint(int index, const Eigen::Vector3d &point, double radius);
 
-        void findCollisions(std::map<int, std::set<int>> &collisions) const;
+        void findCollisions(std::map<int, std::set<int>> &collisions, double tolerance = 1.0e-1) const;
 
         void getData(std::set<Data> &data) const;
 
@@ -43,7 +43,7 @@ namespace Geometry
 
         void updateBoundingBox(int sector);
 
-        void getCollisions(std::map<int, std::set<int>> &collisions) const;
+        void getCollisions(std::map<int, std::set<int>> &collisions, double tolerance) const;
 
         void addIsolatedAtoms(std::map<int, std::set<int>> &collisions) const;
 
