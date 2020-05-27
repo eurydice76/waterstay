@@ -41,6 +41,11 @@ class ResidenceTimesDialog(QtWidgets.QDialog):
         self._residence_times_table.selectionModel().selectionChanged.connect(self.on_select_cell)
 
     def on_select_row(self, row_index):
+        """Event called when a full row of the residence time table is selected
+
+        Args:
+            row_index (int): the index of the seletced row
+        """
 
         mol_index = int(self._residence_times_table.item(row_index, 0).text())
 
@@ -50,7 +55,7 @@ class ResidenceTimesDialog(QtWidgets.QDialog):
         """Event called when a cell of the residence time table is selected
 
         Args:
-            event(PtQt5.QtWidgets.QTableItem)
+            event(PtQt5.QtWidgets.QTableItem): the event
         """
 
         mol_index = int(self._residence_times_table.item(
@@ -72,8 +77,10 @@ class ResidenceTimesDialog(QtWidgets.QDialog):
 
         occ = self._occupancy[idx, :]
 
+        # Case of the initial plot, plot the occupancy
         if not hasattr(self, '_plot'):
             self._plot, = self._axes.plot(occ)
+        # If there is already a plot, just update the y data
         else:
             self._plot.set_ydata(occ)
 
@@ -104,13 +111,16 @@ class ResidenceTimesDialog(QtWidgets.QDialog):
         self._residence_times_table.setColumnCount(2)
         self._residence_times_table.setHorizontalHeaderLabels(['molecule id', 'residence time (%)'])
         self._residence_times_table.setRowCount(len(self._mol_ids))
+        self._residence_times_table.setSortingEnabled(True)
 
+        # Fill the residence times table
         for i in range(n_molecules):
             mol_id, time = self._residence_times[i]
             self._residence_times_table.setItem(i, 0, QtWidgets.QTableWidgetItem(str(mol_id)))
             self._residence_times_table.setItem(
                 i, 1, QtWidgets.QTableWidgetItem("{:8.3f}".format(time)))
 
+        # Plot the first entry by default
         self.update_occupancy_plot(int(self._residence_times_table.item(0, 0).text()))
 
     def build_layout(self):

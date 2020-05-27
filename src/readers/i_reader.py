@@ -74,23 +74,31 @@ class IReader(abc.ABC):
     def read_pbc(self, frame):
         pass
 
-    def get_mol_indexes(self, mol_name="SOL"):
+    def get_mol_indexes(self, target_mol, target_atoms):
+        """Return the nested list of the indexes matching a molecule name and target atoms
+
+        Args:
+            target_mol (str): the target molecule
+            target_atoms (list): the list of target atoms (str)
+        """
 
         indexes = []
 
         current_mol_index = None
         for i, resname in enumerate(self._residue_names):
-            if resname != mol_name:
+            if resname != target_mol:
                 continue
 
             mol_index = self._residue_ids[i]
             if mol_index != current_mol_index:
                 if current_mol_index is not None:
                     indexes.append(new_mol)
-                new_mol = [i]
+                if self._atom_names[i] in target_atoms:
+                    new_mol = [i]
                 current_mol_index = mol_index
             else:
-                new_mol.append(i)
+                if self._atom_names[i] in target_atoms:
+                    new_mol.append(i)
 
         if new_mol:
             indexes.append(new_mol)
@@ -173,17 +181,18 @@ class IReader(abc.ABC):
 
         return bonds
 
-    def mol_in_shell(self, mol_name, center, radius):
+    def mol_in_shell(self, mol_name, target_atoms, center, radius):
         """Compute the residence time of molecules of a given type which are within a shell around an atomic center.
 
         Args:
             mol_name (str): the type of the molecules to scan
+            target_atoms (list): the list of atoms to scan
             center (int): the index of the atomic center
             radius (float): the radius to scan around the atomic center
         """
 
         # Retrieve the indexes of the atoms which belongs to each molecule of the selected type
-        target_mol_indexes = self.get_mol_indexes(mol_name)
+        target_mol_indexes = self.get_mol_indexes(mol_name, target_atoms)
 
         # Initialize the output array
         mol_residence_times = np.zeros((len(target_mol_indexes), self._n_frames), dtype=np.int32)

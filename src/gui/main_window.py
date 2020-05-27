@@ -25,24 +25,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.init_ui()
 
-    def init_ui(self):
-        """Set the widgets of the main window
-        """
-
-        self._reader = None
-
-        self.build_menu()
-
-        self.statusBar().showMessage("waterstay version {}".format(__version__))
-
-        self._main_frame = QtWidgets.QFrame(self)
-
-        self.build_widgets()
-
-        self.build_layout()
-
-        self.build_events()
-
     def build_events(self):
         """Set the signal:slots of the main window
         """
@@ -52,61 +34,51 @@ class MainWindow(QtWidgets.QMainWindow):
         self._atoms_table.selectionModel().selectionChanged.connect(self.on_cell_select)
         self._frame_slider.valueChanged.connect(self.on_change_frame)
         self._frame_spinbox.valueChanged.connect(self.on_change_frame)
+        self._target_mol_name.currentIndexChanged.connect(self.on_select_target_molecule)
         self.selected_atom_changed.connect(self._molecular_viewer.on_pick_atom)
         self._molecular_viewer.picked_atom_changed.connect(self.on_pick_atom)
         self._run.clicked.connect(self.run)
 
-    def run(self):
-        """Run the application
+    def build_layout(self):
+        """Build the layout of the main window.
         """
 
-        if self._reader is None:
-            return
+        self._vl = QtWidgets.QVBoxLayout()
+        self._vl.addWidget(self._molecular_viewer.iren)
 
-        target_mol_name = self._target_mol_name.text().strip()
+        frame_hl = QtWidgets.QHBoxLayout()
+        frame_hl.addWidget(self._frame_slider)
+        frame_hl.addWidget(self._frame_spinbox)
+        self._vl.addLayout(frame_hl)
 
-        if not target_mol_name:
-            error_message = QtWidgets.QMessageBox()
-            error_message.setIcon(QtWidgets.QMessageBox.Warning)
-            error_message.setText('Empty molecule name')
-            error_message.exec()
-            return
+        self._vl.addWidget(self._atoms_table)
 
-        shell_radius = self._shell_radius.value()
-        if shell_radius <= 0.0:
-            error_message = QtWidgets.QMessageBox()
-            error_message.setIcon(QtWidgets.QMessageBox.Warning)
-            error_message.setText('The shell radius must be strictly positive')
-            error_message.exec()
-            return
+        param_hl = QtWidgets.QHBoxLayout()
 
-        center_atom_index = self._atoms_table.currentRow()
-        if center_atom_index == -1:
-            error_message = QtWidgets.QMessageBox()
-            error_message.setIcon(QtWidgets.QMessageBox.Warning)
-            error_message.setText('No atomic center selected')
-            error_message.exec()
-            return
+        target_hlayout = QtWidgets.QHBoxLayout()
+        target_mol_vlayout = QtWidgets.QVBoxLayout()
+        target_mol_hlayout = QtWidgets.QHBoxLayout()
+        target_mol_hlayout.addWidget(self._target_mol_name_label)
+        target_mol_hlayout.addWidget(self._target_mol_name)
 
-        mol_ids, residence_times = self._reader.mol_in_shell(
-            target_mol_name, center_atom_index, shell_radius)
+        shell_radius_hlayout = QtWidgets.QHBoxLayout()
+        shell_radius_hlayout.addWidget(self._shell_radius_label)
+        shell_radius_hlayout.addWidget(self._shell_radius)
 
-        dlg = ResidenceTimesDialog(residence_times, mol_ids, self._reader, self)
-        dlg.setWindowTitle('residence times of {} within {} of atom {}'.format(
-            target_mol_name, shell_radius, center_atom_index))
-        dlg.show()
+        target_mol_vlayout.addLayout(target_mol_hlayout)
+        target_mol_vlayout.addLayout(shell_radius_hlayout)
+        target_mol_vlayout.addStretch()
 
-    def on_change_frame(self, frame):
-        """Event handler when a new frame is selected from the frame slider of the frame spinbox
+        target_hlayout.addLayout(target_mol_vlayout)
+        target_hlayout.addWidget(self._target_atoms)
 
-        Args:
-            frame (int): the selected frame
-        """
+        param_hl.addLayout(target_hlayout)
 
-        self._frame_slider.setValue(frame)
-        self._frame_spinbox.setValue(frame)
+        self._vl.addLayout(param_hl)
 
-        self._molecular_viewer.set_coordinates(frame)
+        self._vl.addWidget(self._run)
+
+        self._main_frame.setLayout(self._vl)
 
     def build_menu(self):
         """Build the menu of the main window.
@@ -123,14 +95,16 @@ class MainWindow(QtWidgets.QMainWindow):
         exit_action.triggered.connect(self.on_quit_application)
 
         menubar = self.menuBar()
-        fileMenu = menubar.addMenu('&File')
+        file_menu = menubar.addMenu('&File')
 
-        fileMenu.addAction(file_action)
-        fileMenu.addAction(exit_action)
+        file_menu.addAction(file_action)
+        file_menu.addAction(exit_action)
 
     def build_widgets(self):
         """Build the widgets of the main window.
         """
+
+        self._main_frame = QtWidgets.QFrame(self)
 
         self._atoms_table = QtWidgets.QTableWidget()
         self._atoms_table.setSelectionBehavior(QtWidgets.QTableView.SelectRows)
@@ -141,9 +115,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._molecular_viewer = MolecularViewer(self._main_frame)
         self._molecular_viewer.renderer.ResetCamera()
-
         self._molecular_viewer.iren.Initialize()
-
         self._molecular_viewer.iren.Start()
 
         self._frame_slider = QtWidgets.QSlider(Qt.Horizontal)
@@ -151,13 +123,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._target_mol_name_label = QtWidgets.QLabel()
         self._target_mol_name_label.setText('Target molecule name')
+        self._target_mol_name = QtWidgets.QComboBox()
 
-        self._target_mol_name = QtWidgets.QLineEdit()
-        self._target_mol_name.setText('SOL')
+        self._target_atoms = QtWidgets.QListWidget()
+        self._target_atoms.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
 
         self._shell_radius_label = QtWidgets.QLabel()
         self._shell_radius_label.setText('Shell radius (A)')
-
         self._shell_radius = QtWidgets.QDoubleSpinBox()
         self._shell_radius.setMinimum(0.0)
         self._shell_radius.setValue(5)
@@ -169,102 +141,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.setGeometry(0, 0, 800, 800)
 
+        self.statusBar().showMessage("waterstay version {}".format(__version__))
+
         self.show()
-
-    def build_layout(self):
-        """Build the layout of the main window.
-        """
-
-        self._vl = QtWidgets.QVBoxLayout()
-        self._vl.addWidget(self._molecular_viewer.iren)
-
-        frame_hl = QtWidgets.QHBoxLayout()
-        frame_hl.addWidget(self._frame_slider)
-        frame_hl.addWidget(self._frame_spinbox)
-        self._vl.addLayout(frame_hl)
-
-        self._vl.addWidget(self._atoms_table)
-
-        run_hl = QtWidgets.QHBoxLayout()
-        run_hl.addWidget(self._target_mol_name_label)
-        run_hl.addWidget(self._target_mol_name)
-        run_hl.addWidget(self._shell_radius_label)
-        run_hl.addWidget(self._shell_radius)
-        run_hl.addWidget(self._run)
-        self._vl.addLayout(run_hl)
-
-        self._main_frame.setLayout(self._vl)
-
-    def on_row_select(self, row_index):
-        """Event handler called when an entire row of the atoms table is selected.
-
-        Args:
-            row_index(int): the select row
-        """
-
-        self.select_atom(row_index)
-
-    def on_cell_select(self, item):
-        """Event handler called when a cell of the atoms table is selected
-
-        Args:
-            item (PyQt5.QtCore.QItemSelection): the selected cell
-        """
-
-        selected_rows = item.indexes()
-
-        if not selected_rows:
-            return
-
-        selected_atom = selected_rows[0].row()
-
-        self.select_atom(selected_atom)
-
-    def select_atom(self, selected_atom):
-        """Select an atom.
-
-        Args:
-            selected_atom (int): the index of the selected atom
-        """
-
-        self.selected_atom_changed.emit(selected_atom)
-
-    def on_open_trajectory_file(self):
-        """Opens a trajectory file.
-        """
-
-        # Pop up a file browser
-        options = QtWidgets.QFileDialog.Options()
-        options |= QtWidgets.QFileDialog.DontUseNativeDialog
-        trajectory_file, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Open trajectory file", "", "PDB Files (*.pdb);;Gromacs Files (*.gro)", options=options)
-
-        # If not trajectory file was selected, exit
-        if not trajectory_file:
-            return
-
-        # Take the trajectory reader corresponding to the selected trajectory based on the trajectory file extension
-        _, ext = os.path.splitext(trajectory_file)
-        self._reader = REGISTERED_READERS[ext](trajectory_file)
-
-        # Update the atoms table
-        self.fill_atoms_table(self._reader, 0)
-
-        # Update the molecular viewer
-        self._molecular_viewer.set_reader(self._reader)
-
-        # Update the frame slider
-        self._frame_slider.setMinimum(0)
-        self._frame_slider.setMaximum(self._reader.n_frames-1)
-        self._frame_slider.setValue(0)
-
-        # Updathe the frame editor
-        self._frame_spinbox.setMinimum(0)
-        self._frame_spinbox.setMaximum(self._reader.n_frames-1)
-        self._frame_spinbox.setValue(0)
-
-        # Update the status bar
-        self.statusBar().showMessage("Loaded {} trajectory file".format(trajectory_file))
 
     def fill_atoms_table(self, reader, frame):
         """Fill the atoms table with the atom contents of a trajectory.
@@ -297,6 +176,89 @@ class MainWindow(QtWidgets.QMainWindow):
             self._atoms_table.setItem(
                 i, 6, QtWidgets.QTableWidgetItem("{:8.3f}".format(coords[i, 2])))
 
+    def init_ui(self):
+        """Set the widgets of the main window
+        """
+
+        self._reader = None
+
+        self.build_menu()
+
+        self.build_widgets()
+
+        self.build_layout()
+
+        self.build_events()
+
+    def on_cell_select(self, item):
+        """Event handler called when a cell of the atoms table is selected
+
+        Args:
+            item (PyQt5.QtCore.QItemSelection): the selected cell
+        """
+
+        selected_rows = item.indexes()
+
+        if not selected_rows:
+            return
+
+        selected_atom = selected_rows[0].row()
+
+        self.select_atom(selected_atom)
+
+    def on_change_frame(self, frame):
+        """Event handler when a new frame is selected from the frame slider of the frame spinbox
+
+        Args:
+            frame (int): the selected frame
+        """
+
+        self._frame_slider.setValue(frame)
+        self._frame_spinbox.setValue(frame)
+
+        self._molecular_viewer.set_coordinates(frame)
+
+    def on_open_trajectory_file(self):
+        """Opens a trajectory file.
+        """
+
+        # Pop up a file browser
+        options = QtWidgets.QFileDialog.Options()
+        options |= QtWidgets.QFileDialog.DontUseNativeDialog
+        trajectory_file, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Open trajectory file", "", "PDB Files (*.pdb);;Gromacs Files (*.gro)", options=options)
+
+        # If not trajectory file was selected, exit
+        if not trajectory_file:
+            return
+
+        # Take the trajectory reader corresponding to the selected trajectory based on the trajectory file extension
+        _, ext = os.path.splitext(trajectory_file)
+        self._reader = REGISTERED_READERS[ext](trajectory_file)
+
+        # Update the atoms table
+        self.fill_atoms_table(self._reader, 0)
+
+        # Update the molecular viewer
+        self._molecular_viewer.set_reader(self._reader)
+
+        # Update the frame slider
+        self._frame_slider.setMinimum(0)
+        self._frame_slider.setMaximum(self._reader.n_frames-1)
+        self._frame_slider.setValue(0)
+
+        # Update the frame editor
+        self._frame_spinbox.setMinimum(0)
+        self._frame_spinbox.setMaximum(self._reader.n_frames-1)
+        self._frame_spinbox.setValue(0)
+
+        # Update the target molecule combo box
+        self._target_mol_name.clear()
+        self._target_mol_name.addItems(sorted(set(self._reader.residue_names)))
+
+        # Update the status bar
+        self.statusBar().showMessage("Loaded {} trajectory file".format(trajectory_file))
+
     def on_pick_atom(self, picked_atom):
         """Event handler when an atom is picked from the molecular viewer.
 
@@ -315,6 +277,83 @@ class MainWindow(QtWidgets.QMainWindow):
                                                 QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
         if choice == QtWidgets.QMessageBox.Yes:
             sys.exit()
+
+    def on_row_select(self, row_index):
+        """Event handler called when an entire row of the atoms table is selected.
+
+        Args:
+            row_index(int): the select row
+        """
+
+        self.select_atom(row_index)
+
+    def on_select_target_molecule(self, index):
+        """Event handler called when the target molecule is changed
+
+        Args:
+            index (int): the combobox index of the newly selected molecule
+        """
+
+        target_mol = self._target_mol_name.currentText()
+
+        atom_names = self._reader.atom_names
+
+        target_atoms = set()
+        for i, res_name in enumerate(self._reader.residue_names):
+            if res_name == target_mol:
+                target_atoms.add(atom_names[i])
+
+        target_atoms = sorted(target_atoms)
+
+        self._target_atoms.clear()
+        self._target_atoms.addItems(target_atoms)
+
+    def run(self):
+        """Run the application
+        """
+
+        if self._reader is None:
+            return
+
+        target_mol_name = self._target_mol_name.currentText()
+
+        target_atoms = self._target_atoms.selectedItems()
+        if not target_atoms:
+            target_atoms = [self._target_atoms.item(i) for i in range(self._target_atoms.count())]
+        target_atoms = [item.text() for item in target_atoms]
+
+        shell_radius = self._shell_radius.value()
+        if shell_radius <= 0.0:
+            error_message = QtWidgets.QMessageBox()
+            error_message.setIcon(QtWidgets.QMessageBox.Warning)
+            error_message.setText('The shell radius must be strictly positive')
+            error_message.exec()
+            return
+
+        center_atom_index = self._atoms_table.currentRow()
+        if center_atom_index == -1:
+            error_message = QtWidgets.QMessageBox()
+            error_message.setIcon(QtWidgets.QMessageBox.Warning)
+            error_message.setText('No atomic center selected')
+            error_message.exec()
+            return
+
+        mol_ids, residence_times = self._reader.mol_in_shell(
+            target_mol_name, target_atoms, center_atom_index, shell_radius)
+
+        dlg = ResidenceTimesDialog(residence_times, mol_ids, self._reader, self)
+        dlg.setWindowTitle('residence times of {} within {} of atom {}'.format(
+            target_mol_name, shell_radius, center_atom_index))
+        dlg.show()
+
+    def select_atom(self, selected_atom):
+        """Select an atom.
+
+        Args:
+            selected_atom (int): the index of the selected atom
+        """
+
+        self.selected_atom_changed.emit(selected_atom)
 
 
 if __name__ == "__main__":
