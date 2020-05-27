@@ -1,6 +1,14 @@
+version 0.0.2
+--------------
+* ADDED   dialog for displaying the results of a residence time analysis
+* ADDED   the user can now select target atoms for the analysis
+* ADDED   the tolerance as a parameter of connectivity search
+* ADDED   extension for computing atoms in a shell around an atomic center within a given radius
+* CHANGED the internal distance units are now in angstrom
+
 version 0.0.1
 --------------
-* ADDED bond visualization feature
+* ADDED   bond visualization feature
 * CHANGED the various chemical radii stored in the database are now in angstrom
 
 version 0.0.0
