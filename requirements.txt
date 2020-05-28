@@ -31,8 +31,6 @@ six==1.14.0
 toml==0.10.1
 traitlets==4.3.3
 typed-ast==1.4.1
-UNKNOWN @ file:///home/eric/Git/waterstay/cython/atoms_in_shell
 vtk==8.1.2
-waterstay @ file:///home/eric/Git/waterstay
 wcwidth==0.1.9
 wrapt==1.12.1
