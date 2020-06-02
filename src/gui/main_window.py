@@ -9,6 +9,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
+import waterstay
 from waterstay.__pkginfo__ import __version__
 from waterstay.database import CHEMICAL_ELEMENTS
 from waterstay.readers.reader_registry import REGISTERED_READERS
@@ -142,6 +143,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setGeometry(0, 0, 800, 800)
 
         self.statusBar().showMessage("waterstay version {}".format(__version__))
+
+        icon_path = os.path.join(waterstay.__path__[0], "icons", "icon.png")
+        self.setWindowIcon(QtGui.QIcon(icon_path))
 
         self.show()
 
