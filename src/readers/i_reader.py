@@ -154,7 +154,6 @@ class IReader(abc.ABC):
                     if upper_atom_name in symbols:
                         self._atom_types.append(upper_atom_name.capitalize())
                         break
-                    # print(upper_atom_name)
                     if start == 0:
                         raise ValueError('Unknown atom type: {}'.format(atom_name))
                     start -= 1
