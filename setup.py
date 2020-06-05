@@ -1,10 +1,11 @@
 import fnmatch
+import glob
 import os
 import sys
 
 from distutils.util import convert_path
-from distutils.core import Extension, setup
 from distutils.sysconfig import get_config_vars
+from setuptools import Extension, setup
 
 from Cython.Distutils import build_ext as cython_build_ext
 
@@ -86,6 +87,12 @@ package = find_packages(path="src", base="waterstay")
 package_data = find_package_data(where='src', package='waterstay')
 
 #################################
+# Scripts section
+#################################
+
+scripts = glob.glob(os.path.join('scripts','*'))
+
+#################################
 # Extensions section
 #################################
 
@@ -111,6 +118,9 @@ CMDCLASS = {'build_ext': cython_build_ext}
 # The setup section
 #################################
 
+with open('requirements.txt','r') as fin:
+	deps = fin.readlines()
+
 setup(name="waterstay",
       version=package_info["__version__"],
       description=package_info["__description__"],
@@ -120,9 +130,11 @@ setup(name="waterstay",
       maintainer=package_info["__maintainer__"],
       maintainer_email=package_info["__maintainer_email__"],
       license=package_info["__license__"],
+      install_requires=deps,
       packages=package,
       package_data=package_data,
       package_dir={"waterstay": "src"},
       ext_modules=EXTENSIONS,
       cmdclass=CMDCLASS,
-      platforms=['Unix', 'Windows'])
+      platforms=['Unix', 'Windows'],
+      scripts=scripts)

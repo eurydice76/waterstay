@@ -1,11 +1,8 @@
 astroid==2.4.1
-autopep8==1.5.2
 backcall==0.1.0
 cycler==0.10.0
 Cython==0.29.19
 decorator==4.4.2
-ipython==7.14.0
-ipython-genutils==0.2.0
 isort==4.3.21
 jedi==0.17.0
 kiwisolver==1.2.0
@@ -16,12 +13,10 @@ numpy==1.18.4
 parso==0.7.0
 pexpect==4.8.0
 pickleshare==0.7.5
-pkg-resources==0.0.0
 prompt-toolkit==3.0.5
 ptyprocess==0.6.0
 pycodestyle==2.6.0
 Pygments==2.6.1
-pylint==2.5.2
 pyparsing==2.4.7
 PyQt5==5.14.2
 PyQt5-sip==12.7.2
