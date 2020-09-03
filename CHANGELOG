@@ -1,3 +1,10 @@
+version 0.0.5
+--------------
+* FIXED   bug when computing the scanning for molecules in shell
+* ADDED   logger to the application
+* ADDED   progress bar to the application
+* ADDED   docstrings
+
 version 0.0.4
 --------------
 * CHANGED requirements.txt file
