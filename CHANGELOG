@@ -1,3 +1,7 @@
+version 0.0.7
+--------------
+* FIXED   changing frame trigger segfault when reader is None
+
 version 0.0.6
 --------------
 * ADDED   right-click event in the molecular viewer for displaying in the logger information about the clicked atom
