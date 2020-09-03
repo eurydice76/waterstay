@@ -1,3 +1,8 @@
+version 0.0.8
+--------------
+* ADDED yaml file for storing standard residues
+* ADDED dialog for adding new standard residue to the database
+
 version 0.0.7
 --------------
 * FIXED   changing frame trigger segfault when reader is None
