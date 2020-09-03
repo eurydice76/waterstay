@@ -229,8 +229,6 @@ class MolecularViewer(QtWidgets.QWidget):
 
         del self._actors
 
-        self._reader = None
-
     def enable_picking(self):
         """Enables the picking of vtk object stored in the scene.
         """
@@ -328,6 +326,9 @@ class MolecularViewer(QtWidgets.QWidget):
         @type frame: integer
         '''
 
+        if self._reader is None:
+            return
+
         self._current_frame = frame % self._reader.n_frames
 
         coords = self._reader.read_frame(self._current_frame)
@@ -354,9 +355,9 @@ class MolecularViewer(QtWidgets.QWidget):
         if (self._reader is not None) and (reader.filename == self._reader.filename):
             return
 
-        self._reader = reader
-
         self.clear_trajectory()
+
+        self._reader = reader
 
         self._n_atoms = self._reader.n_atoms
         self._n_frames = self._reader.n_frames
