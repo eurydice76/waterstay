@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 
@@ -13,11 +14,15 @@ import waterstay
 from waterstay.__pkginfo__ import __version__
 from waterstay.database import CHEMICAL_ELEMENTS
 from waterstay.readers.reader_registry import REGISTERED_READERS
+from waterstay.gui.logger_widget import QTextEditLogger
 from waterstay.gui.molecular_viewer import MolecularViewer
 from waterstay.gui.residence_times_dialog import ResidenceTimesDialog
+from waterstay.utils.progress_bar import progress_bar
 
 
 class MainWindow(QtWidgets.QMainWindow):
+    """This class implements the main window of the application.
+    """
 
     selected_atom_changed = QtCore.pyqtSignal(int)
 
@@ -79,6 +84,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._vl.addWidget(self._run)
 
+        self._vl.addWidget(self._logger.widget)
+
         self._main_frame.setLayout(self._vl)
 
     def build_menu(self):
@@ -138,11 +145,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self._run = QtWidgets.QPushButton()
         self._run.setText('Run')
 
+        self._logger = QTextEditLogger(self)
+        self._logger.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+        logging.getLogger().addHandler(self._logger)
+        logging.getLogger().setLevel(logging.INFO)
+
         self.setCentralWidget(self._main_frame)
 
         self.setGeometry(0, 0, 800, 800)
 
         self.statusBar().showMessage("waterstay version {}".format(__version__))
+        self._progress_label = QtWidgets.QLabel('Progress')
+        self._progress_bar = QtWidgets.QProgressBar()
+        progress_bar.set_progress_widget(self._progress_bar)
+        self.statusBar().showMessage("inspigtor {}".format(__version__))
+        self.statusBar().addPermanentWidget(self._progress_label)
+        self.statusBar().addPermanentWidget(self._progress_bar)
 
         icon_path = os.path.join(waterstay.__path__[0], "icons", "icon.png")
         self.setWindowIcon(QtGui.QIcon(icon_path))
@@ -328,22 +346,22 @@ class MainWindow(QtWidgets.QMainWindow):
 
         shell_radius = self._shell_radius.value()
         if shell_radius <= 0.0:
-            error_message = QtWidgets.QMessageBox()
-            error_message.setIcon(QtWidgets.QMessageBox.Warning)
-            error_message.setText('The shell radius must be strictly positive')
-            error_message.exec()
+            logging.error('The shell radius must be strictly positive')
             return
 
         center_atom_index = self._atoms_table.currentRow()
         if center_atom_index == -1:
-            error_message = QtWidgets.QMessageBox()
-            error_message.setIcon(QtWidgets.QMessageBox.Warning)
-            error_message.setText('No atomic center selected')
-            error_message.exec()
+            logging.error('No atomic center selected')
             return
 
-        mol_ids, residence_times = self._reader.mol_in_shell(
+        mol_in_shell = self._reader.mol_in_shell(
             target_mol_name, target_atoms, center_atom_index, shell_radius)
+
+        if mol_in_shell is None:
+            logging.error('No molecule found in shell')
+            return
+
+        mol_ids, residence_times = mol_in_shell
 
         dlg = ResidenceTimesDialog(residence_times, mol_ids, self._reader, self)
         dlg.setWindowTitle('residence times of {} within {} of atom {}'.format(

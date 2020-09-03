@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 
 from waterstay.readers.i_reader import IReader
@@ -52,6 +54,8 @@ class PDBReader(IReader):
         self._frame_size = self._n_atoms*self._coords_size
 
         self.parse_first_frame()
+
+        logging.info('Read {} successfully'.format(filename))
 
     def parse_first_frame(self):
         """Parse the first frame to get resp. the residue ids and names and the atoms ids and names.
@@ -146,3 +150,16 @@ class PDBReader(IReader):
         pbc[2, 2] = c*np.sqrt(1.0 - cos_beta*cos_beta - fact*fact)
 
         return pbc
+
+
+if __name__ == '__main__':
+
+    import sys
+
+    pdb_file = sys.argv[1]
+
+    reader = PDBReader(pdb_file)
+
+    indexes = reader.get_mol_indexes('ARG', ['2HH2'])
+
+    print(indexes)

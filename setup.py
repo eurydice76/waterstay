@@ -137,4 +137,5 @@ setup(name="waterstay",
       ext_modules=EXTENSIONS,
       cmdclass=CMDCLASS,
       platforms=['Unix', 'Windows'],
+      include_dirs=['/usr/include/eigen3/'],
       scripts=scripts)

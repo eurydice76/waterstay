@@ -1,5 +1,5 @@
 {
-    "python.pythonPath": "/home/eric/Venvs/md/bin/python3",
+    "python.pythonPath": "/home/trc/venvs/waterstay/bin/python",
     "python.venvPath": "/home/eric/Venvs",
     "python.globalModuleInstallation": true,
     "python.linting.enabled": true,

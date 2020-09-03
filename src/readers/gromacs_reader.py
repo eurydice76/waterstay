@@ -1,3 +1,4 @@
+import logging
 import sys
 
 import numpy as np
@@ -56,6 +57,8 @@ class GromacsReader(IReader):
         self._frame_size = self._n_atoms*self._coords_size
 
         self.parse_first_frame()
+
+        logging.info('Read {} successfully'.format(filename))
 
     def parse_first_frame(self):
         """Parse the first frame to get resp. the residue ids and names and the atoms ids and names.

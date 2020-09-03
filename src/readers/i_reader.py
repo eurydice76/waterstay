@@ -1,11 +1,14 @@
 import abc
+import collections
+import logging
 import os
 
 import numpy as np
 
 from waterstay.database import CHEMICAL_ELEMENTS
-from waterstay.extensions.connectivity import PyConnectivity
 from waterstay.extensions.atoms_in_shell import atoms_in_shell
+from waterstay.extensions.connectivity import PyConnectivity
+from waterstay.utils.progress_bar import progress_bar
 
 STANDARD_RESIDUES = ['AIB', 'ALA', 'ARG', 'ARGN', 'ASN', 'ASP', 'ASPH', 'CYS', 'CYS2', 'CYSH', 'CYX',
                      'GLN', 'GLU', 'GLUH', 'GLY', 'HIS', 'HISD', 'HISE', 'HISH', 'ILE', 'LEU', 'LYS',
@@ -13,8 +16,15 @@ STANDARD_RESIDUES = ['AIB', 'ALA', 'ARG', 'ARGN', 'ASN', 'ASP', 'ASPH', 'CYS', '
 
 
 class IReader(abc.ABC):
+    """This class implements an interface for trajectory readers.
+    """
 
     def __init__(self, filename):
+        """Constructor.
+
+        Args:
+            filename (str): the trajectory filename
+        """
 
         if not os.path.exists(filename):
             raise IOError("The file {} does not exist.".format(filename))
@@ -28,6 +38,7 @@ class IReader(abc.ABC):
         self._n_atoms = 0
 
     def __del__(self):
+
         self._fin.close()
 
     @property
@@ -166,28 +177,16 @@ class IReader(abc.ABC):
             target_atoms (list): the list of target atoms (str)
         """
 
-        indexes = []
+        indexes = [i for i, at in enumerate(self._atom_names) if at in target_atoms]
 
-        current_mol_index = None
-        for i, resname in enumerate(self._residue_names):
-            if resname != target_mol:
-                continue
+        indexes_per_molecule = collections.OrderedDict()
+        for idx in indexes:
+            resid = self._residue_ids[idx]
+            indexes_per_molecule.setdefault(resid, []).append(idx)
 
-            mol_index = self._residue_ids[i]
-            if mol_index != current_mol_index:
-                if current_mol_index is not None:
-                    indexes.append(new_mol)
-                if self._atom_names[i] in target_atoms:
-                    new_mol = [i]
-                current_mol_index = mol_index
-            else:
-                if self._atom_names[i] in target_atoms:
-                    new_mol.append(i)
+        indexes_per_molecule = list(indexes_per_molecule.values())
 
-        if new_mol:
-            indexes.append(new_mol)
-
-        return indexes
+        return indexes_per_molecule
 
     def mol_in_shell(self, mol_name, target_atoms, center, radius):
         """Compute the residence time of molecules of a given type which are within a shell around an atomic center.
@@ -201,9 +200,14 @@ class IReader(abc.ABC):
 
         # Retrieve the indexes of the atoms which belongs to each molecule of the selected type
         target_mol_indexes = self.get_mol_indexes(mol_name, target_atoms)
+        if not target_mol_indexes:
+            logging.warning('No atom found that matches {}@{}'.format(target_atoms, mol_name))
+            return None
 
         # Initialize the output array
         mol_residence_times = np.zeros((len(target_mol_indexes), self._n_frames), dtype=np.int32)
+
+        progress_bar.reset(self._n_frames)
 
         # Loop over the frame of the trajectory
         for frame in range(self._n_frames):
@@ -222,5 +226,7 @@ class IReader(abc.ABC):
                            center, radius, mol_residence_times[:, frame])
 
             mol_ids = [self._residue_ids[v[0]] for v in target_mol_indexes]
+
+            progress_bar.update(frame+1)
 
         return mol_ids, mol_residence_times
