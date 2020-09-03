@@ -43,6 +43,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._target_mol_name.currentIndexChanged.connect(self.on_select_target_molecule)
         self.selected_atom_changed.connect(self._molecular_viewer.on_pick_atom)
         self._molecular_viewer.picked_atom_changed.connect(self.on_pick_atom)
+        self._molecular_viewer.show_atom_info.connect(self.on_show_atom_info)
         self._run.clicked.connect(self.run)
 
     def build_layout(self):
@@ -329,6 +330,26 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._target_atoms.clear()
         self._target_atoms.addItems(target_atoms)
+
+    def on_show_atom_info(self, picked_atom):
+        """Display information about the picked atom in the logger
+
+        Args:
+            picked_atom (int): the index of the picked atom
+        """
+
+        residue_name = self._atoms_table.item(picked_atom, 0).text()
+        residue_id = self._atoms_table.item(picked_atom, 1).text()
+        atom_name = self._atoms_table.item(picked_atom, 2).text()
+        atom_id = self._atoms_table.item(picked_atom, 3).text()
+        x = self._atoms_table.item(picked_atom, 4).text()
+        y = self._atoms_table.item(picked_atom, 5).text()
+        z = self._atoms_table.item(picked_atom, 6).text()
+
+        info_string = "atom {}({}) of molecule {}({}) @ {},{},{}".format(atom_name,
+                                                                         atom_id, residue_name, residue_id, x, y, z)
+
+        logging.info(info_string)
 
     def run(self):
         """Run the application
