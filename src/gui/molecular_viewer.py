@@ -70,6 +70,8 @@ class MolecularViewer(QtWidgets.QWidget):
 
     picked_atom_changed = QtCore.pyqtSignal(int)
 
+    show_atom_info = QtCore.pyqtSignal(int)
+
     def __init__(self, parent):
 
         super(MolecularViewer, self).__init__(parent)
@@ -93,7 +95,6 @@ class MolecularViewer(QtWidgets.QWidget):
         self._camera.SetFocalPoint(0, 0, 0)
         self._camera.SetPosition(0, 0, 20)
 
-        self._picker_observer_id = None
         self._picker = vtk.vtkCellPicker()
         self._picker.SetTolerance(0.005)
 
@@ -234,7 +235,8 @@ class MolecularViewer(QtWidgets.QWidget):
         """Enables the picking of vtk object stored in the scene.
         """
 
-        self._picker_observer_id = self._iren.AddObserver("LeftButtonPressEvent", self.on_pick)
+        self._iren.AddObserver("LeftButtonPressEvent", self.on_pick)
+        self._iren.AddObserver("RightButtonPressEvent", self.on_show_atom_info)
 
     def get_atom_index(self, pid):
         """Return the atom index from the vtk data point index.
@@ -253,7 +255,7 @@ class MolecularViewer(QtWidgets.QWidget):
         return self._iren.GetRenderWindow()
 
     def on_pick(self, obj, event=None):
-        """Event handler when an atom is mouse-picked
+        """Event handler when an atom is mouse-picked with the left mouse button
         """
 
         if not self._reader:
@@ -300,6 +302,23 @@ class MolecularViewer(QtWidgets.QWidget):
         self._iren.Render()
 
         self.picked_atom_changed.emit(picked_atom)
+
+    def on_show_atom_info(self, obj, event=None):
+        """Event handler when an atom is mouse-picked with the right mouse button
+        """
+
+        if self._reader is None:
+            return
+
+        # Get the picked position and retrieve the index of the atom that was picked from it
+        pos = obj.GetEventPosition()
+        self._picker.AddPickList(self._picking_domain)
+        self._picker.PickFromListOn()
+        self._picker.Pick(pos[0], pos[1], 0, self._renderer)
+        pid = self._picker.GetPointId()
+        if pid > 0:
+            picked_atom = self.get_atom_index(pid)
+            self.show_atom_info.emit(picked_atom)
 
     def set_coordinates(self, frame):
         '''

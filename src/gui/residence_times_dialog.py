@@ -97,7 +97,7 @@ class ResidenceTimesDialog(QtWidgets.QDialog):
         self._axes.set_ylabel('occupancy')
         self._axes.set_xlim([0, self._reader.n_frames-1])
         self._axes.set_ylim([-1, 2])
-        self._axes.set_xticks(range(self._reader.n_frames))
+        self._axes.set_xticks(range(0, self._reader.n_frames, 10))
         self._axes.set_yticks(range(0, 2))
         self._canvas = FigureCanvasQTAgg(self._figure)
         self._toolbar = NavigationToolbar2QT(self._canvas, self)
