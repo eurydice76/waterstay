@@ -2,6 +2,8 @@ import logging
 import os
 import sys
 
+import yaml
+
 import numpy as np
 
 from PyQt5.QtCore import Qt
@@ -12,7 +14,7 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 import waterstay
 from waterstay.__pkginfo__ import __version__
-from waterstay.database import CHEMICAL_ELEMENTS
+from waterstay.database import CHEMICAL_ELEMENTS, STANDARD_RESIDUES
 from waterstay.readers.reader_registry import REGISTERED_READERS
 from waterstay.gui.logger_widget import QTextEditLogger
 from waterstay.gui.molecular_viewer import MolecularViewer
@@ -108,6 +110,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
         file_menu.addAction(file_action)
         file_menu.addAction(exit_action)
+
+        database_menu = menubar.addMenu('&Database')
+
+        add_standard_residue_action = QtWidgets.QAction('&Add standard residue', self)
+        add_standard_residue_action.setShortcut('Ctrl+A')
+        add_standard_residue_action.setStatusTip('Add a new standard residues to database')
+        add_standard_residue_action.triggered.connect(self.on_add_standard_residue)
+
+        database_menu.addAction(add_standard_residue_action)
 
     def build_widgets(self):
         """Build the widgets of the main window.
@@ -212,6 +223,28 @@ class MainWindow(QtWidgets.QMainWindow):
         self.build_layout()
 
         self.build_events()
+
+    def on_add_standard_residue(self):
+        """Add a new residue to the database
+        """
+
+        residue, ok = QtWidgets.QInputDialog.getText(
+            self, 'Enter residue name', 'Add standard residue name', QtWidgets.QLineEdit.Normal, '')
+
+        if not ok or not residue:
+            return
+
+        if residue in STANDARD_RESIDUES:
+            return
+
+        STANDARD_RESIDUES.append(residue)
+
+        homedir = os.path.expanduser('~')
+
+        database_path = os.path.join(homedir, '.waterstay', 'residues.yml')
+
+        with open(database_path, 'w') as file:
+            yaml.dump(STANDARD_RESIDUES, file)
 
     def on_cell_select(self, item):
         """Event handler called when a cell of the atoms table is selected

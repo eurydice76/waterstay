@@ -2,10 +2,9 @@ import os
 import yaml
 
 
-def load_database():
-
-    homedir = os.path.expanduser('~')
-    database_path = os.path.join(homedir, '.waterstay', 'chemical_elements.yml')
+def load_database(database_path):
+    """Load in memory the database YAML file
+    """
 
     # Load the chemical elements database
     with open(database_path, 'r') as fin:
@@ -17,4 +16,6 @@ def load_database():
     return database
 
 
-CHEMICAL_ELEMENTS = load_database()
+_homedir = os.path.expanduser('~')
+CHEMICAL_ELEMENTS = load_database(os.path.join(_homedir, '.waterstay', 'chemical_elements.yml'))
+STANDARD_RESIDUES = load_database(os.path.join(_homedir, '.waterstay', 'residues.yml'))

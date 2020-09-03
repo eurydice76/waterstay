@@ -5,14 +5,10 @@ import os
 
 import numpy as np
 
-from waterstay.database import CHEMICAL_ELEMENTS
+from waterstay.database import CHEMICAL_ELEMENTS, STANDARD_RESIDUES
 from waterstay.extensions.atoms_in_shell import atoms_in_shell
 from waterstay.extensions.connectivity import PyConnectivity
 from waterstay.utils.progress_bar import progress_bar
-
-STANDARD_RESIDUES = ['AIB', 'ALA', 'ARG', 'ARGN', 'ASN', 'ASP', 'ASPH', 'CYS', 'CYS2', 'CYSH', 'CYX',
-                     'GLN', 'GLU', 'GLUH', 'GLY', 'HIS', 'HISD', 'HISE', 'HISH', 'ILE', 'LEU', 'LYS',
-                     'LYSH', 'MET', 'PGLU', 'PHE', 'PRO', 'QLN', 'SER', 'THR', 'TYR', 'TRP', 'VAL']
 
 
 class IReader(abc.ABC):

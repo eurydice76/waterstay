@@ -5,8 +5,15 @@ import waterstay
 
 # Copy the chemical elements database to $HOME/.waterstay/
 homedir = os.path.expanduser('~')
-database_path = os.path.join(homedir, '.waterstay', 'chemical_elements.yml')
-if not os.path.exists(database_path):
-    os.makedirs(os.path.dirname(database_path))
-    shutil.copy(os.path.join(waterstay.__path__[0],
-                             'database', 'chemical_elements.yml'), database_path)
+
+databases = ['chemical_elements.yml', 'residues.yml']
+
+for db in databases:
+    database_path = os.path.join(homedir, '.waterstay', db)
+    if not os.path.exists(database_path):
+        try:
+            os.makedirs(os.path.dirname(database_path))
+        except FileExistsError:
+            pass
+        shutil.copy(os.path.join(waterstay.__path__[0],
+                                 'database', db), database_path)
