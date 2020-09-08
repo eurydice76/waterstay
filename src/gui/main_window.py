@@ -46,14 +46,11 @@ class MainWindow(QtWidgets.QMainWindow):
         """Build the layout of the main window.
         """
 
-        self._vl = QtWidgets.QVBoxLayout()
-        self._vl.addWidget(self._molecular_viewer.iren)
+        main_layout = QtWidgets.QHBoxLayout()
 
-        frame_hl = QtWidgets.QHBoxLayout()
-        frame_hl.addWidget(self._frame_spinbox)
-        self._vl.addLayout(frame_hl)
+        left_layout = QtWidgets.QVBoxLayout()
 
-        self._vl.addWidget(self._atoms_table)
+        left_layout.addWidget(self._atoms_table)
 
         parameters_layout = QtWidgets.QVBoxLayout()
 
@@ -69,13 +66,20 @@ class MainWindow(QtWidgets.QMainWindow):
         parameters_layout.addLayout(target_hlayout)
         parameters_layout.addLayout(shell_radius_hlayout)
 
-        self._vl.addLayout(parameters_layout)
+        left_layout.addLayout(parameters_layout)
 
-        self._vl.addWidget(self._run)
+        left_layout.addWidget(self._run)
 
-        self._vl.addWidget(self._logger.widget)
+        left_layout.addWidget(self._logger.widget)
 
-        self._main_frame.setLayout(self._vl)
+        right_layout = QtWidgets.QVBoxLayout()
+        right_layout.addWidget(self._molecular_viewer.iren)
+        right_layout.addWidget(self._frame_spinbox)
+
+        main_layout.addLayout(left_layout, stretch=1)
+        main_layout.addLayout(right_layout, stretch=2)
+
+        self._main_frame.setLayout(main_layout)
 
     def build_menu(self):
         """Build the menu of the main window.
@@ -151,7 +155,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.setCentralWidget(self._main_frame)
 
-        self.setGeometry(0, 0, 800, 800)
+        self.setGeometry(0, 0, 1200, 800)
 
         self.statusBar().showMessage("waterstay version {}".format(__version__))
         self._progress_label = QtWidgets.QLabel('Progress')

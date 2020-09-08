@@ -7,7 +7,6 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 from waterstay.database import CHEMICAL_ELEMENTS
 from waterstay.extensions.connectivity import PyConnectivity
-from waterstay.extensions.contiguous_molecules import contiguous_molecules
 
 RGB_COLOURS = {}
 RGB_COLOURS["selection"] = (0, (1.00, 0.20, 1.00))
@@ -318,18 +317,29 @@ class MolecularViewer(QtWidgets.QWidget):
         """Event handler when an atom is mouse-picked with the right mouse button
         """
 
-        if self._reader is None:
+        if not self._reader:
             return
 
-        # Get the picked position and retrieve the index of the atom that was picked from it
+        picker = vtk.vtkPropPicker()
+
+        picker.AddPickList(self._picking_domain)
+        picker.PickFromListOn()
+
         pos = obj.GetEventPosition()
-        self._picker.AddPickList(self._picking_domain)
-        self._picker.PickFromListOn()
-        self._picker.Pick(pos[0], pos[1], 0, self._renderer)
-        pid = self._picker.GetPointId()
-        if pid > 0:
-            picked_atom = self.get_atom_index(pid)
-            self.show_atom_info.emit(picked_atom)
+        picker.Pick(pos[0], pos[1], 0, self._renderer)
+
+        picked_actor = picker.GetActor()
+        if picked_actor is None:
+            return
+
+        picked_pos = np.array(picker.GetPickPosition())
+
+        picked_atom = self._connectivity_builder.get_neighbour(picked_pos)
+
+        if picked_atom < 0 or picked_atom >= self._n_atoms:
+            return
+
+        self.show_atom_info.emit(picked_atom)
 
     def set_connectivity_builder(self, coords, covalent_radii):
 
