@@ -21,4 +21,4 @@ __repo__ = "https://gitlab.com/eurydice38/waterstay.git"
 
 __license__ = "GPL 3"
 
-__version__ = "0.0.9"
+__version__ = "0.0.10"
