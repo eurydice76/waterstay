@@ -1,3 +1,9 @@
+version 0.0.9
+--------------
+* ADDED pandas support
+* ADDED cython method to find the nearest neighbour (if any) of a given point
+* ADDED the time residence analysis take as option a time selection now
+
 version 0.0.8
 --------------
 * ADDED yaml file for storing standard residues
