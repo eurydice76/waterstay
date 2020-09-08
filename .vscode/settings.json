@@ -9,7 +9,7 @@
     "csv-preview.separator": ";",
     "workbench.startupEditor": "newUntitledFile",
     "python.formatting.autopep8Args": [
-        "--max-line-length=100"
+        "--max-line-length=180"
     ],
     "files.associations": {
         "array": "cpp",

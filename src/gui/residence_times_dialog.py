@@ -1,27 +1,25 @@
 from PyQt5 import QtWidgets
 
+import pandas as pd
+
 from pylab import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
 
 
 class ResidenceTimesDialog(QtWidgets.QDialog):
 
-    def __init__(self, occupancy, mol_ids, reader, *args, **kwargs):
+    def __init__(self, occupancies, *args, **kwargs):
 
         super(ResidenceTimesDialog, self).__init__(*args, **kwargs)
 
         self.setGeometry(0, 0, 1000, 400)
 
-        self._occupancy = occupancy
+        self._occupancies = occupancies
 
-        self._mol_ids = mol_ids
+        n_times = len(self._occupancies.columns)
 
-        self._reader = reader
-
-        self._residence_times = occupancy.sum(axis=1)/self._reader.n_frames
-        self._residence_times *= 100.0
-        self._residence_times = list(zip(self._mol_ids, self._residence_times))
-        self._residence_times.sort(key=lambda x: x[1], reverse=True)
+        self._residence_times = pd.Series(100.0*self._occupancies.sum(axis=1)/n_times, index=self._occupancies.index)
+        self._residence_times = self._residence_times.sort_values(ascending=False)
 
         self.init_ui()
 
@@ -36,6 +34,8 @@ class ResidenceTimesDialog(QtWidgets.QDialog):
         self.build_events()
 
     def build_events(self):
+        """Build the signal/slots.
+        """
 
         self._residence_times_table.verticalHeader().sectionClicked.connect(self.on_select_row)
         self._residence_times_table.selectionModel().selectionChanged.connect(self.on_select_cell)
@@ -44,45 +44,40 @@ class ResidenceTimesDialog(QtWidgets.QDialog):
         """Event called when a full row of the residence time table is selected
 
         Args:
-            row_index (int): the index of the seletced row
+            row_index (int): the index of the selected row
         """
 
-        mol_index = int(self._residence_times_table.item(row_index, 0).text())
+        residue_index = int(self._residence_times_table.item(row_index, 0).text())
 
-        self.update_occupancy_plot(mol_index)
+        self.update_residence_time_plot(residue_index)
 
-    def on_select_cell(self, event):
+    def on_select_cell(self):
         """Event called when a cell of the residence time table is selected
-
-        Args:
-            event(PtQt5.QtWidgets.QTableItem): the event
         """
 
-        mol_index = int(self._residence_times_table.item(
-            self._residence_times_table.currentRow(), 0).text())
+        residue_index = int(self._residence_times_table.item(self._residence_times_table.currentRow(), 0).text())
 
-        self.update_occupancy_plot(mol_index)
+        self.update_residence_time_plot(residue_index)
 
-    def update_occupancy_plot(self, mol_index):
-        """Update the occupancy plot with a selected molecule
+    def update_residence_time_plot(self, residue_index):
+        """Update the residence time plot for a given residue index
 
         Args:
-            mol_index (int): the index of the selected molecule
+            residue_index (int): the residue index
         """
 
-        try:
-            idx = self._mol_ids.index(mol_index)
-        except ValueError:
-            return
+        occupancy = self._occupancies.loc[residue_index, :]
 
-        occ = self._occupancy[idx, :]
+        self._axes.clear()
+        self._axes.set_xlabel('time')
+        self._axes.set_ylabel('occupancy')
 
-        # Case of the initial plot, plot the occupancy
-        if not hasattr(self, '_plot'):
-            self._plot, = self._axes.plot(occ)
-        # If there is already a plot, just update the y data
-        else:
-            self._plot.set_ydata(occ)
+        # self._axes.set_xlim([0, len(self._occupancies.columns)-1])
+        self._axes.set_ylim([-1, 2])
+
+        times = self._occupancies.columns
+
+        self._plot, = self._axes.plot(times, occupancy, '.')
 
         self._canvas.draw()
 
@@ -90,15 +85,10 @@ class ResidenceTimesDialog(QtWidgets.QDialog):
         """Build the widgets of the dialog
         """
 
-        # Build the matplotlib imsho widget
+        # Build the matplotlib widget
         self._figure = Figure()
         self._axes = self._figure.add_subplot(111)
-        self._axes.set_xlabel('frame')
-        self._axes.set_ylabel('occupancy')
-        self._axes.set_xlim([0, self._reader.n_frames-1])
-        self._axes.set_ylim([-1, 2])
-        self._axes.set_xticks(range(0, self._reader.n_frames, 10))
-        self._axes.set_yticks(range(0, 2))
+
         self._canvas = FigureCanvasQTAgg(self._figure)
         self._toolbar = NavigationToolbar2QT(self._canvas, self)
 
@@ -107,24 +97,23 @@ class ResidenceTimesDialog(QtWidgets.QDialog):
         self._residence_times_table.setSelectionBehavior(QtWidgets.QTableView.SelectRows)
         self._residence_times_table.setSelectionMode(QtWidgets.QTableView.SingleSelection)
 
-        n_molecules = len(self._mol_ids)
+        n_residues = len(self._residence_times)
+        self._residence_times_table.setRowCount(n_residues)
         self._residence_times_table.setColumnCount(2)
-        self._residence_times_table.setHorizontalHeaderLabels(['molecule id', 'residence time (%)'])
-        self._residence_times_table.setRowCount(len(self._mol_ids))
+        self._residence_times_table.setHorizontalHeaderLabels(['residue id', 'residence time (%)'])
         self._residence_times_table.setSortingEnabled(True)
 
         # Fill the residence times table
-        for i in range(n_molecules):
-            mol_id, time = self._residence_times[i]
-            self._residence_times_table.setItem(i, 0, QtWidgets.QTableWidgetItem(str(mol_id)))
-            self._residence_times_table.setItem(
-                i, 1, QtWidgets.QTableWidgetItem("{:8.3f}".format(time)))
+        for i, v in enumerate(self._residence_times.index):
+            time = self._residence_times.loc[v]
+            self._residence_times_table.setItem(i, 0, QtWidgets.QTableWidgetItem(str(v)))
+            self._residence_times_table.setItem(i, 1, QtWidgets.QTableWidgetItem("{:8.3f}".format(time)))
 
         # Plot the first entry by default
-        self.update_occupancy_plot(int(self._residence_times_table.item(0, 0).text()))
+        self.update_residence_time_plot(int(self._residence_times_table.item(0, 0).text()))
 
     def build_layout(self):
-        """Set the layout for the dialog
+        """Set the layout for the dialog.
         """
 
         self._hl = QtWidgets.QHBoxLayout()

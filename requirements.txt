@@ -1,6 +1,7 @@
 Cython
 matplotlib
 numpy
+pandas
 PyQt5
 PyYAML
 vtk

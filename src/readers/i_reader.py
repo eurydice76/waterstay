@@ -3,12 +3,18 @@ import collections
 import logging
 import os
 
+import pandas as pd
+
 import numpy as np
 
 from waterstay.database import CHEMICAL_ELEMENTS, STANDARD_RESIDUES
 from waterstay.extensions.atoms_in_shell import atoms_in_shell
-from waterstay.extensions.connectivity import PyConnectivity
 from waterstay.utils.progress_bar import progress_bar
+
+
+class InvalidFileError(Exception):
+    """This class implements an exception for invalid file.
+    """
 
 
 class IReader(abc.ABC):
@@ -58,6 +64,16 @@ class IReader(abc.ABC):
         return self._atom_types
 
     @property
+    def molecules(self):
+
+        mol_indexes = collections.OrderedDict()
+
+        for i, resid in enumerate(self._residue_ids):
+            mol_indexes.setdefault(resid, []).append(i)
+
+        return list(mol_indexes.values())
+
+    @property
     def residue_ids(self):
         return self._residue_ids
 
@@ -68,6 +84,10 @@ class IReader(abc.ABC):
     @property
     def n_frames(self):
         return self._n_frames
+
+    @property
+    def times(self):
+        return self._times
 
     @abc.abstractmethod
     def parse_first_frame(self):
@@ -80,39 +100,6 @@ class IReader(abc.ABC):
     @abc.abstractmethod
     def read_pbc(self, frame):
         pass
-
-    def build_connectivity(self, frame):
-        """Build the connectivity for the whole system at a given frame.
-
-        Args:
-            frame (int): the selected frame
-        """
-
-        # Read the first frame to fetch the residue and atom names
-        coords = self.read_frame(frame)
-
-        # Compute the bounding box of the system
-        lower_bound = coords.min(axis=0)
-        upper_bound = coords.max(axis=0)
-
-        # Enlarge it a bit to not miss any atom
-        lower_bound -= 1.0e-6
-        upper_bound += 1.0e-6
-
-        # Fetch the covalent radii from the database
-        cov_radii = [CHEMICAL_ELEMENTS['atoms'][at]['covalent_radius'] for at in self._atom_types]
-
-        # Initializes the octree used to build the connectivity
-        connectivity_builder = PyConnectivity(lower_bound, upper_bound, 0, 10, 18)
-
-        # Add the points to the octree
-        for index, xyz, radius in zip(range(self._n_atoms), coords, cov_radii):
-            connectivity_builder.add_point(index, xyz, radius)
-
-        # Compute the collisions
-        bonds = connectivity_builder.find_collisions(1.0e-1)
-
-        return bonds
 
     def guess_atom_types(self):
         """Guess the atom type (element) from their atom names.
@@ -165,15 +152,23 @@ class IReader(abc.ABC):
                         raise ValueError('Unknown atom type: {}'.format(atom_name))
                     start -= 1
 
-    def get_mol_indexes(self, target_mol, target_atoms):
-        """Return the nested list of the indexes matching a molecule name and target atoms
+    def get_atom_indexes(self, residue_names, atom_names):
+        """Return the nested list of the indexes of the atoms whose residue and name are respectively in the provided 
+        list of residue and atom names.
 
         Args:
-            target_mol (str): the target molecule
-            target_atoms (list): the list of target atoms (str)
+            residue_names (list of str): the residues to scan
+            atom_names (list of str): the atoms to scan
         """
 
-        indexes = [i for i, at in enumerate(self._atom_names) if at in target_atoms]
+        indexes = []
+        for i, at in enumerate(self._atom_names):
+            current_residue = self._residue_names[i]
+            if current_residue not in residue_names:
+                continue
+
+            if at in atom_names:
+                indexes.append(i)
 
         indexes_per_molecule = collections.OrderedDict()
         for idx in indexes:
@@ -184,29 +179,32 @@ class IReader(abc.ABC):
 
         return indexes_per_molecule
 
-    def mol_in_shell(self, mol_name, target_atoms, center, radius):
+    def residues_in_shell(self, residue_names, atom_names, center, radius, *, selected_frames=None):
         """Compute the residence time of molecules of a given type which are within a shell around an atomic center.
 
         Args:
-            mol_name (str): the type of the molecules to scan
-            target_atoms (list): the list of atoms to scan
+            residue_names (list of str): the residues to scan
+            target_atoms (list of str): the atoms to scan
             center (int): the index of the atomic center
             radius (float): the radius to scan around the atomic center
         """
 
+        if selected_frames is None:
+            selected_frames = list(range(self._n_frames))
+
         # Retrieve the indexes of the atoms which belongs to each molecule of the selected type
-        target_mol_indexes = self.get_mol_indexes(mol_name, target_atoms)
-        if not target_mol_indexes:
-            logging.warning('No atom found that matches {}@{}'.format(target_atoms, mol_name))
+        target_indexes = self.get_atom_indexes(residue_names, atom_names)
+        if not target_indexes:
+            logging.warning('No atom found that matches {}@{}'.format(atom_names, residue_names))
             return None
 
         # Initialize the output array
-        mol_residence_times = np.zeros((len(target_mol_indexes), self._n_frames), dtype=np.int32)
+        occupancies = np.zeros((len(target_indexes), self._n_frames), dtype=np.int32)
 
-        progress_bar.reset(self._n_frames)
+        progress_bar.reset(len(selected_frames))
 
         # Loop over the frame of the trajectory
-        for frame in range(self._n_frames):
+        for frame in selected_frames:
 
             # Read the frame at time=frame
             coords = self.read_frame(frame)
@@ -218,11 +216,13 @@ class IReader(abc.ABC):
             rcell = np.linalg.inv(cell)
 
             # Scan for the molecules of the selected type which are found around the atomic center by the selected radius
-            atoms_in_shell(coords, cell, rcell, target_mol_indexes,
-                           center, radius, mol_residence_times[:, frame])
-
-            mol_ids = [self._residue_ids[v[0]] for v in target_mol_indexes]
+            atoms_in_shell(coords, cell, rcell, target_indexes, center, radius, occupancies[:, frame])
 
             progress_bar.update(frame+1)
 
-        return mol_ids, mol_residence_times
+        mol_ids = [self._residue_ids[v[0]] for v in target_indexes]
+
+        selected_times = [self._times[f] for f in selected_frames]
+        occupancies = pd.DataFrame(occupancies, index=mol_ids, columns=selected_times)
+
+        return occupancies

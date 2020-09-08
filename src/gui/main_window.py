@@ -4,17 +4,12 @@ import sys
 
 import yaml
 
-import numpy as np
-
-from PyQt5.QtCore import Qt
 from PyQt5 import QtCore, QtGui, QtWidgets
-
-import vtk
-from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 import waterstay
 from waterstay.__pkginfo__ import __version__
-from waterstay.database import CHEMICAL_ELEMENTS, STANDARD_RESIDUES
+from waterstay.database import STANDARD_RESIDUES
+from waterstay.readers.i_reader import InvalidFileError
 from waterstay.readers.reader_registry import REGISTERED_READERS
 from waterstay.gui.logger_widget import QTextEditLogger
 from waterstay.gui.molecular_viewer import MolecularViewer
@@ -40,9 +35,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Signals/slots
         self._atoms_table.verticalHeader().sectionClicked.connect(self.on_row_select)
         self._atoms_table.selectionModel().selectionChanged.connect(self.on_cell_select)
-        self._frame_slider.valueChanged.connect(self.on_change_frame)
         self._frame_spinbox.valueChanged.connect(self.on_change_frame)
-        self._target_mol_name.currentIndexChanged.connect(self.on_select_target_molecule)
+        self._target_residues.selectionModel().selectionChanged.connect(self.on_select_target_residues)
         self.selected_atom_changed.connect(self._molecular_viewer.on_pick_atom)
         self._molecular_viewer.picked_atom_changed.connect(self.on_pick_atom)
         self._molecular_viewer.show_atom_info.connect(self.on_show_atom_info)
@@ -56,34 +50,26 @@ class MainWindow(QtWidgets.QMainWindow):
         self._vl.addWidget(self._molecular_viewer.iren)
 
         frame_hl = QtWidgets.QHBoxLayout()
-        frame_hl.addWidget(self._frame_slider)
         frame_hl.addWidget(self._frame_spinbox)
         self._vl.addLayout(frame_hl)
 
         self._vl.addWidget(self._atoms_table)
 
-        param_hl = QtWidgets.QHBoxLayout()
+        parameters_layout = QtWidgets.QVBoxLayout()
 
         target_hlayout = QtWidgets.QHBoxLayout()
-        target_mol_vlayout = QtWidgets.QVBoxLayout()
-        target_mol_hlayout = QtWidgets.QHBoxLayout()
-        target_mol_hlayout.addWidget(self._target_mol_name_label)
-        target_mol_hlayout.addWidget(self._target_mol_name)
+        target_hlayout.addWidget(self._target_residues)
+        target_hlayout.addWidget(self._target_atoms)
+        target_hlayout.addWidget(self._target_times)
 
         shell_radius_hlayout = QtWidgets.QHBoxLayout()
         shell_radius_hlayout.addWidget(self._shell_radius_label)
         shell_radius_hlayout.addWidget(self._shell_radius)
 
-        target_mol_vlayout.addLayout(target_mol_hlayout)
-        target_mol_vlayout.addLayout(shell_radius_hlayout)
-        target_mol_vlayout.addStretch()
+        parameters_layout.addLayout(target_hlayout)
+        parameters_layout.addLayout(shell_radius_hlayout)
 
-        target_hlayout.addLayout(target_mol_vlayout)
-        target_hlayout.addWidget(self._target_atoms)
-
-        param_hl.addLayout(target_hlayout)
-
-        self._vl.addLayout(param_hl)
+        self._vl.addLayout(parameters_layout)
 
         self._vl.addWidget(self._run)
 
@@ -114,7 +100,7 @@ class MainWindow(QtWidgets.QMainWindow):
         database_menu = menubar.addMenu('&Database')
 
         add_standard_residue_action = QtWidgets.QAction('&Add standard residue', self)
-        add_standard_residue_action.setShortcut('Ctrl+A')
+        add_standard_residue_action.setShortcut('Ctrl+R')
         add_standard_residue_action.setStatusTip('Add a new standard residues to database')
         add_standard_residue_action.triggered.connect(self.on_add_standard_residue)
 
@@ -138,15 +124,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self._molecular_viewer.iren.Initialize()
         self._molecular_viewer.iren.Start()
 
-        self._frame_slider = QtWidgets.QSlider(Qt.Horizontal)
         self._frame_spinbox = QtWidgets.QSpinBox()
 
-        self._target_mol_name_label = QtWidgets.QLabel()
-        self._target_mol_name_label.setText('Target molecule name')
-        self._target_mol_name = QtWidgets.QComboBox()
+        self._target_residues = QtWidgets.QListWidget()
+        self._target_residues.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
 
         self._target_atoms = QtWidgets.QListWidget()
         self._target_atoms.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+
+        self._target_times = QtWidgets.QListWidget()
+        self._target_times.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
 
         self._shell_radius_label = QtWidgets.QLabel()
         self._shell_radius_label.setText('Shell radius (A)')
@@ -269,7 +256,6 @@ class MainWindow(QtWidgets.QMainWindow):
             frame (int): the selected frame
         """
 
-        self._frame_slider.setValue(frame)
         self._frame_spinbox.setValue(frame)
 
         self._molecular_viewer.set_coordinates(frame)
@@ -290,7 +276,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Take the trajectory reader corresponding to the selected trajectory based on the trajectory file extension
         _, ext = os.path.splitext(trajectory_file)
-        self._reader = REGISTERED_READERS[ext](trajectory_file)
+        try:
+            self._reader = REGISTERED_READERS[ext](trajectory_file)
+        except InvalidFileError as error:
+            logging.error(str(error))
+            return
 
         # Update the atoms table
         self.fill_atoms_table(self._reader, 0)
@@ -298,19 +288,18 @@ class MainWindow(QtWidgets.QMainWindow):
         # Update the molecular viewer
         self._molecular_viewer.set_reader(self._reader)
 
-        # Update the frame slider
-        self._frame_slider.setMinimum(0)
-        self._frame_slider.setMaximum(self._reader.n_frames-1)
-        self._frame_slider.setValue(0)
-
         # Update the frame editor
         self._frame_spinbox.setMinimum(0)
         self._frame_spinbox.setMaximum(self._reader.n_frames-1)
         self._frame_spinbox.setValue(0)
 
-        # Update the target molecule combo box
-        self._target_mol_name.clear()
-        self._target_mol_name.addItems(sorted(set(self._reader.residue_names)))
+        # Update the target residues combo box
+        self._target_residues.clear()
+        self._target_residues.addItems(sorted(set(self._reader.residue_names)))
+
+        # Update the target times listview
+        self._target_times.clear()
+        self._target_times.addItems([str(v) for v in self._reader.times])
 
         # Update the status bar
         self.statusBar().showMessage("Loaded {} trajectory file".format(trajectory_file))
@@ -343,20 +332,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.select_atom(row_index)
 
-    def on_select_target_molecule(self, index):
+    def on_select_target_residues(self):
         """Event handler called when the target molecule is changed
-
-        Args:
-            index (int): the combobox index of the newly selected molecule
         """
 
-        target_mol = self._target_mol_name.currentText()
+        selected_target_residues = [item.text() for item in self._target_residues.selectedItems()]
+        if not selected_target_residues:
+            return
 
         atom_names = self._reader.atom_names
 
         target_atoms = set()
         for i, res_name in enumerate(self._reader.residue_names):
-            if res_name == target_mol:
+            if res_name in selected_target_residues:
                 target_atoms.add(atom_names[i])
 
         target_atoms = sorted(target_atoms)
@@ -391,12 +379,17 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._reader is None:
             return
 
-        target_mol_name = self._target_mol_name.currentText()
+        selected_target_residues = [item.text() for item in self._target_residues.selectedItems()]
+        if not selected_target_residues:
+            return
 
-        target_atoms = self._target_atoms.selectedItems()
-        if not target_atoms:
-            target_atoms = [self._target_atoms.item(i) for i in range(self._target_atoms.count())]
-        target_atoms = [item.text() for item in target_atoms]
+        selected_target_atoms = [item.text() for item in self._target_atoms.selectedItems()]
+        if not selected_target_atoms:
+            return
+
+        selected_frames = [index.row() for index in self._target_times.selectedIndexes()]
+        if not selected_frames:
+            return
 
         shell_radius = self._shell_radius.value()
         if shell_radius <= 0.0:
@@ -408,18 +401,13 @@ class MainWindow(QtWidgets.QMainWindow):
             logging.error('No atomic center selected')
             return
 
-        mol_in_shell = self._reader.mol_in_shell(
-            target_mol_name, target_atoms, center_atom_index, shell_radius)
+        occupancies = self._reader.residues_in_shell(selected_target_residues, selected_target_atoms, center_atom_index, shell_radius, selected_frames=selected_frames)
 
-        if mol_in_shell is None:
-            logging.error('No molecule found in shell')
+        if occupancies is None:
+            logging.error('No residue found in shell')
             return
 
-        mol_ids, residence_times = mol_in_shell
-
-        dlg = ResidenceTimesDialog(residence_times, mol_ids, self._reader, self)
-        dlg.setWindowTitle('residence times of {} within {} of atom {}'.format(
-            target_mol_name, shell_radius, center_atom_index))
+        dlg = ResidenceTimesDialog(occupancies, self)
         dlg.show()
 
     def select_atom(self, selected_atom):

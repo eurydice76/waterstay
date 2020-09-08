@@ -1,9 +1,10 @@
 import logging
+import re
 import sys
 
 import numpy as np
 
-from waterstay.readers.i_reader import IReader
+from waterstay.readers.i_reader import InvalidFileError, IReader
 from waterstay.readers.reader_registry import register_reader
 
 
@@ -31,6 +32,7 @@ class GromacsReader(IReader):
 
         # Loop over the file to get the length of all title lines (:-( they change over the file)
         # Compute also the number of frames
+        self._times = []
         self._pbc_starts = []
         self._frame_starts = []
         self._n_frames = 0
@@ -41,7 +43,12 @@ class GromacsReader(IReader):
                 if not line:
                     eof = True
                     break
-                if i == 1:
+                if i == 0:
+                    match = re.search('.* t= (.*) step=', line)
+                    if match is None:
+                        raise InvalidFileError('Invalid PDB file')
+                    self._times.append(float(match.groups()[0]))
+                elif i == 1:
                     self._frame_starts.append(self._fin.tell())
                 elif i == self._n_atoms + 1:
                     self._pbc_starts.append(self._fin.tell())
@@ -152,3 +159,16 @@ class GromacsReader(IReader):
         pbc *= 10.0
 
         return pbc
+
+
+if __name__ == '__main__':
+
+    import sys
+
+    gro_file = sys.argv[1]
+
+    reader = GromacsReader(gro_file)
+
+    indexes = reader.get_mol_indexes('ARG', ['2HH2'])
+
+    print(indexes)

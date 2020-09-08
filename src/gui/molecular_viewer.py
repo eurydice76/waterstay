@@ -6,10 +6,42 @@ import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 from waterstay.database import CHEMICAL_ELEMENTS
+from waterstay.extensions.connectivity import PyConnectivity
+from waterstay.extensions.contiguous_molecules import contiguous_molecules
 
 RGB_COLOURS = {}
 RGB_COLOURS["selection"] = (0, (1.00, 0.20, 1.00))
 RGB_COLOURS["default"] = (1, (1.00, 0.90, 0.90))
+
+
+def build_color_transfer_function(atoms):
+    """Returns the colors and their associated transfer function
+    """
+
+    lut = vtk.vtkColorTransferFunction()
+
+    for (idx, color) in RGB_COLOURS.values():
+        lut.AddRGBPoint(idx, *color)
+
+    colours = []
+    unic_colours = {}
+
+    color_string_list = [color_string_to_rgb(
+        CHEMICAL_ELEMENTS['atoms'][at]['color']) for at in atoms]
+
+    col_ids = len(RGB_COLOURS)
+
+    for col in color_string_list:
+        tup_col = tuple(col)
+        if tup_col not in unic_colours.keys():
+            unic_colours[tup_col] = col_ids
+            lut.AddRGBPoint(col_ids, *tup_col)
+            colours.append(col_ids)
+            col_ids += 1
+        else:
+            colours.append(unic_colours[tup_col])
+
+    return colours, lut
 
 
 def color_string_to_rgb(color):
@@ -96,7 +128,7 @@ class MolecularViewer(QtWidgets.QWidget):
         self._camera.SetPosition(0, 0, 20)
 
         self._picker = vtk.vtkCellPicker()
-        self._picker.SetTolerance(0.005)
+        self._picker.SetTolerance(0.05)
 
         self._n_atoms = 0
         self._n_frames = 0
@@ -126,42 +158,12 @@ class MolecularViewer(QtWidgets.QWidget):
     def renderer(self):
         return self._renderer
 
-    def build_color_transfer_function(self):
-        """Returns the colors and their associated transfer function
-        """
-
-        lut = vtk.vtkColorTransferFunction()
-
-        for (idx, color) in RGB_COLOURS.values():
-            lut.AddRGBPoint(idx, *color)
-
-        colours = []
-        unic_colours = {}
-
-        color_string_list = [color_string_to_rgb(
-            CHEMICAL_ELEMENTS['atoms'][at]['color']) for at in self._atoms]
-
-        col_ids = len(RGB_COLOURS)
-
-        for col in color_string_list:
-            tup_col = tuple(col)
-            if not (tup_col in unic_colours.keys()):
-                unic_colours[tup_col] = col_ids
-                lut.AddRGBPoint(col_ids, *tup_col)
-                colours.append(col_ids)
-                col_ids += 1
-            else:
-                colours.append(unic_colours[tup_col])
-
-        return colours, lut
-
     def build_scene(self):
         '''
         build a vtkPolyData object for a given frame of the trajectory
         '''
 
         actor_list = []
-        line_actor = None
 
         line_mapper = vtk.vtkPolyDataMapper()
         if vtk.vtkVersion.GetVTKMajorVersion() < 6:
@@ -259,21 +261,32 @@ class MolecularViewer(QtWidgets.QWidget):
         if not self._reader:
             return
 
-        # Get the picked position and retrieve the index of the atom that was picked from it
+        picker = vtk.vtkPropPicker()
+
+        picker.AddPickList(self._picking_domain)
+        picker.PickFromListOn()
+
         pos = obj.GetEventPosition()
-        self._picker.AddPickList(self._picking_domain)
-        self._picker.PickFromListOn()
-        self._picker.Pick(pos[0], pos[1], 0, self._renderer)
-        pid = self._picker.GetPointId()
-        if pid > 0:
-            idx = self.get_atom_index(pid)
-            self.on_pick_atom(idx)
+        picker.Pick(pos[0], pos[1], 0, self._renderer)
+
+        picked_actor = picker.GetActor()
+        if picked_actor is None:
+            return
+
+        picked_pos = np.array(picker.GetPickPosition())
+
+        picked_atom = self._connectivity_builder.get_neighbour(picked_pos)
+
+        self.on_pick_atom(picked_atom)
 
     def on_pick_atom(self, picked_atom):
         """Change the color of a selected atom
         """
 
         if self._reader is None:
+            return
+
+        if picked_atom < 0 or picked_atom >= self._n_atoms:
             return
 
         # If an atom was previously picked, restore its scale and color
@@ -318,9 +331,25 @@ class MolecularViewer(QtWidgets.QWidget):
             picked_atom = self.get_atom_index(pid)
             self.show_atom_info.emit(picked_atom)
 
+    def set_connectivity_builder(self, coords, covalent_radii):
+
+        # Compute the bounding box of the system
+        lower_bound = coords.min(axis=0)
+        upper_bound = coords.max(axis=0)
+
+        # Enlarge it a bit to not miss any atom
+        lower_bound -= 1.0e-6
+        upper_bound += 1.0e-6
+
+        # Initializes the octree used to build the connectivity
+        self._connectivity_builder = PyConnectivity(lower_bound, upper_bound, 0, 10, 18)
+
+        # Add the points to the octree
+        for index, xyz, radius in zip(range(self._n_atoms), coords, covalent_radii):
+            self._connectivity_builder.add_point(index, xyz, radius)
+
     def set_coordinates(self, frame):
-        '''
-        Sets a new configuration
+        '''Sets a new configuration.
 
         @param frame: the configuration number
         @type frame: integer
@@ -333,13 +362,28 @@ class MolecularViewer(QtWidgets.QWidget):
 
         coords = self._reader.read_frame(self._current_frame)
 
-        points = vtk.vtkPoints()
-        points.SetNumberOfPoints(self._n_atoms)
+        atoms = vtk.vtkPoints()
+        atoms.SetNumberOfPoints(self._n_atoms)
         for i in range(self._n_atoms):
-            x, y, z = coords[i]
-            points.SetPoint(i, x, y, z)
+            x, y, z = coords[i, :]
+            atoms.SetPoint(i, x, y, z)
 
-        self._polydata.SetPoints(points)
+        self._polydata.SetPoints(atoms)
+
+        covalent_radii = [CHEMICAL_ELEMENTS['atoms'][at]['covalent_radius'] for at in self._reader.atom_types]
+        self.set_connectivity_builder(coords, covalent_radii)
+        chemical_bonds = self._connectivity_builder.find_collisions(1.0e-1)
+
+        bonds = vtk.vtkCellArray()
+        for at, bonded_ats in chemical_bonds.items():
+
+            for bonded_at in bonded_ats:
+                line = vtk.vtkLine()
+                line.GetPointIds().SetId(0, at)
+                line.GetPointIds().SetId(1, bonded_at)
+                bonds.InsertNextCell(line)
+
+        self._polydata.SetLines(bonds)
 
         # Update the view.
         self.update_renderer()
@@ -369,10 +413,9 @@ class MolecularViewer(QtWidgets.QWidget):
         self._resolution = 10 if self._resolution > 10 else self._resolution
         self._resolution = 4 if self._resolution < 4 else self._resolution
 
-        self._atom_colours, self._lut = self.build_color_transfer_function()
+        self._atom_colours, self._lut = build_color_transfer_function(self._atoms)
 
-        self._atom_scales = np.array([CHEMICAL_ELEMENTS['atoms'][at]['vdw_radius']
-                                      for at in self._atoms]).astype(np.float32)
+        self._atom_scales = np.array([CHEMICAL_ELEMENTS['atoms'][at]['vdw_radius'] for at in self._atoms]).astype(np.float32)
 
         scalars = ndarray_to_vtkarray(self._atom_colours, self._atom_scales, self._n_atoms)
 
@@ -380,18 +423,6 @@ class MolecularViewer(QtWidgets.QWidget):
         self._polydata.GetPointData().SetScalars(scalars)
 
         self.set_coordinates(frame)
-        chemical_bonds = self._reader.build_connectivity(0)
-
-        vtk_bonds = vtk.vtkCellArray()
-        for at, bonded_ats in chemical_bonds.items():
-
-            for bonded_at in bonded_ats:
-                line = vtk.vtkLine()
-                line.GetPointIds().SetId(0, at)
-                line.GetPointIds().SetId(1, bonded_at)
-                vtk_bonds.InsertNextCell(line)
-
-        self._polydata.SetLines(vtk_bonds)
 
     def update_renderer(self):
         '''

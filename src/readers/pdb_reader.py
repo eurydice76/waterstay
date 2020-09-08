@@ -1,8 +1,9 @@
 import logging
+import re
 
 import numpy as np
 
-from waterstay.readers.i_reader import IReader
+from waterstay.readers.i_reader import InvalidFileError, IReader
 from waterstay.readers.reader_registry import register_reader
 
 
@@ -28,6 +29,7 @@ class PDBReader(IReader):
 
         # Loop over the file to get the length of all title lines (:-( they change over the file)
         # Compute also the number of frames
+        self._times = []
         self._pbc_starts = []
         self._frame_starts = []
         self._n_frames = 0
@@ -38,6 +40,11 @@ class PDBReader(IReader):
                 if not line:
                     eof = True
                     break
+                if i == 1:
+                    match = re.search('.* t= (.*) step=', line)
+                    if match is None:
+                        raise InvalidFileError('Invalid PDB file')
+                    self._times.append(float(match.groups()[0]))
                 if i == 2:
                     self._pbc_starts.append(self._fin.tell())
                 elif i == 4:
