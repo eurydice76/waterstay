@@ -1,7 +1,11 @@
+import waterstay
 import os
 import shutil
 
-import waterstay
+import vtk
+
+vtk.vtkObject.GlobalWarningDisplayOff()
+
 
 # Copy the chemical elements database to $HOME/.waterstay/
 homedir = os.path.expanduser('~')
