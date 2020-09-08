@@ -30,6 +30,8 @@ namespace Geometry
 
         bool addPoint(int index, const Eigen::Vector3d &point, double radius);
 
+        void getNeighbour(const Eigen::Vector3d &point, int& index) const;
+
         void findCollisions(std::map<int, std::set<int>> &collisions, double tolerance = 1.0e-1) const;
 
         void getData(std::set<Data> &data) const;
@@ -40,6 +42,8 @@ namespace Geometry
         bool hasChildren() const;
 
         bool collide(const Eigen::Vector3d &lowerBound, const Eigen::Vector3d &upperBound) const;
+
+        bool contains(const Eigen::Vector3d &point) const;
 
         void updateBoundingBox(int sector);
 

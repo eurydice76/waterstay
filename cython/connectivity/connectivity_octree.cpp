@@ -73,6 +73,16 @@ namespace Geometry
         return true;
     }
 
+    bool ConnectivityOctree::contains(const Eigen::Vector3d &point) const
+    {
+        for (int i = 0; i < 3; ++i)
+        {
+            if (point(i) < _lowerBound(i) || point(i) > _upperBound(i))
+                return false;
+        }
+        return true;        
+    }
+
     bool ConnectivityOctree::hasChildren() const
     {
         return (!_children.empty());
@@ -136,6 +146,33 @@ namespace Geometry
         }
 
         return true;
+    }
+
+    void ConnectivityOctree::getNeighbour(const Eigen::Vector3d& point, int& index) const
+    {
+        if (!contains(point))
+            return;
+
+        if (hasChildren())
+        {
+            for (const auto &child : _children)
+                child.getNeighbour(point, index);
+        }
+        else
+        {
+            for (const auto& d : _data)
+            {
+                auto squaredDist = (d.point - point).squaredNorm();
+                auto squaredRadius = d.radius*d.radius;
+                if (squaredDist < squaredRadius)
+                {
+                    index = d.index;
+                    return;
+                }
+            }
+        }
+
+        return;
     }
 
     void ConnectivityOctree::getData(std::set<Data> &data) const

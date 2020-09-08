@@ -63,7 +63,7 @@ def atoms_in_shell(cnp.ndarray[cnp.float64_t, ndim=2] coords not None,
             sdy = y_boxed - shell_center_boxed[1]
             sdz = z_boxed - shell_center_boxed[2]
 
-            # Apply the PBC to the bxx coordinates distance vector between atom j qand the center of the shell
+            # Apply the PBC to the box coordinates distance vector between atom j and the center of the shell
             sdx -= round(sdx)
             sdy -= round(sdy)
             sdz -= round(sdz)

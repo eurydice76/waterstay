@@ -19,12 +19,18 @@ cdef class PyConnectivity:
         cdef Vector3d upper = Vector3d(ub[0],ub[1],ub[2])
         self.c_octree = ConnectivityOctree(lower,upper,depth,maxStorage,maxDepth)
 
-    def add_point(self, int index, cnp.ndarray[double,ndim=1] pt, double radius):
-        cdef Vector3d point = Vector3d(pt[0],pt[1],pt[2])
-        return self.c_octree.addPoint(index,point,radius)
+    def add_point(self, int index, cnp.ndarray[double,ndim=1] point, double radius):
+        cdef Vector3d pt = Vector3d(point[0],point[1],point[2])
+        return self.c_octree.addPoint(index,pt,radius)
 
     def find_collisions(self, tolerance):
         cdef map[int,set[int]] collisions
         self.c_octree.findCollisions(collisions, tolerance)
         return collisions
+
+    def get_neighbour(self, cnp.ndarray[double,ndim=1] point):
+        cdef Vector3d pt = Vector3d(point[0],point[1],point[2])
+        cdef int idx
+        self.c_octree.getNeighbour(pt,idx)
+        return idx
 
