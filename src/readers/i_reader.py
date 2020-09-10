@@ -17,6 +17,11 @@ class InvalidFileError(Exception):
     """
 
 
+class InvalidAtomError(Exception):
+    """This class implements an exception raised in case of an invalid atom selection.
+    """
+
+
 class IReader(abc.ABC):
     """This class implements an interface for trajectory readers.
     """
@@ -178,6 +183,31 @@ class IReader(abc.ABC):
         indexes_per_molecule = list(indexes_per_molecule.values())
 
         return indexes_per_molecule
+
+    def read_atom_trajectory(self, index):
+        """Read the trajectory of a single atom with a given index
+
+        Returns:
+            3-tuple: the coordinates of the atoms through the trajectory alongside with the lower bounds and upper bounds
+        """
+
+        if index < 0 or index >= self._n_atoms:
+            raise InvalidAtomError('Invalid atom index')
+
+        coords = []
+        lower_bounds = []
+        upper_bounds = []
+        for f in range(self._n_frames):
+            frame = self.read_frame(f)
+            coords.append(frame[index, :])
+            lower_bounds.append(frame.min(axis=0))
+            upper_bounds.append(frame.max(axis=0))
+
+        coords = np.array(coords)
+        lower_bounds = np.array(lower_bounds)
+        upper_bounds = np.array(upper_bounds)
+
+        return coords, lower_bounds, upper_bounds
 
     def residues_in_shell(self, residue_names, atom_names, center, radius, *, selected_frames=None):
         """Compute the residence time of molecules of a given type which are within a shell around an atomic center.

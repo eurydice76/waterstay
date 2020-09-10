@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 
 from PyQt5 import QtCore, QtWidgets
@@ -7,6 +9,8 @@ from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
 
 from waterstay.database import CHEMICAL_ELEMENTS
 from waterstay.extensions.connectivity import PyConnectivity
+from waterstay.extensions.histogram_3d import histogram_3d
+from waterstay.gui.atomic_trace_settings_dialog import AtomicTraceSettingsDialog
 
 RGB_COLOURS = {}
 RGB_COLOURS["selection"] = (0, (1.00, 0.20, 1.00))
@@ -95,6 +99,30 @@ def ndarray_to_vtkarray(colors, scales, n_atoms):
     return scalars
 
 
+def array_to_3d_imagedata(data, spacing):
+
+    nx = data.shape[0]
+    ny = data.shape[1]
+    nz = data.shape[2]
+    image = vtk.vtkImageData()
+    image.SetDimensions(nx, ny, nz)
+    dx, dy, dz = spacing
+    image.SetSpacing(dx, dy, dz)
+    image.SetExtent(0, nx-1, 0, ny-1, 0, nz-1)
+    if vtk.vtkVersion.GetVTKMajorVersion() < 6:
+        image.SetScalarTypeToDouble()
+        image.SetNumberOfScalarComponents(1)
+    else:
+        image.AllocateScalars(vtk.VTK_DOUBLE, 1)
+
+    for i in range(nx):
+        for j in range(ny):
+            for k in range(nz):
+                image.SetScalarComponentFromDouble(i, j, k, 0, data[i, j, k])
+
+    return image
+
+
 class MolecularViewer(QtWidgets.QWidget):
     """This class implements a molecular viewer.
     """
@@ -139,6 +167,8 @@ class MolecularViewer(QtWidgets.QWidget):
 
         self._polydata = None
 
+        self._surface = None
+
         self._reader = None
 
         self._current_frame = 0
@@ -147,19 +177,75 @@ class MolecularViewer(QtWidgets.QWidget):
 
         self._previously_picked_atom = None
 
-        self.enable_picking()
+        self.build_events()
 
-    @property
-    def iren(self):
-        return self._iren
+    def _draw_isosurface(self, index):
+        """Draw the isosurface of an atom with the given index
+        """
 
-    @property
-    def renderer(self):
-        return self._renderer
+        if self._surface is not None:
+            self.on_clear_atomic_trace()
+
+        logging.info('Computing isosurface ...')
+
+        initial_coords = self._reader.read_frame(0)
+        coords, lower_bounds, upper_bounds = self._reader.read_atom_trajectory(index)
+        spacing, self._atomic_trace_histogram = histogram_3d(coords, lower_bounds, upper_bounds, 100, 100, 100)
+
+        self._image = array_to_3d_imagedata(self._atomic_trace_histogram, spacing)
+        isovalue = self._atomic_trace_histogram.mean()
+
+        self._isocontour = vtk.vtkMarchingContourFilter()
+        self._isocontour.UseScalarTreeOn()
+        self._isocontour.ComputeNormalsOn()
+        if vtk.vtkVersion.GetVTKMajorVersion() < 6:
+            self._isocontour.SetInput(self.image)
+        else:
+            self._isocontour.SetInputData(self._image)
+        self._isocontour.SetValue(0, isovalue)
+
+        self._depthSort = vtk.vtkDepthSortPolyData()
+        self._depthSort.SetInputConnection(self._isocontour.GetOutputPort())
+        self._depthSort.SetDirectionToBackToFront()
+        self._depthSort.SetVector(1, 1, 1)
+        self._depthSort.SetCamera(self._camera)
+        self._depthSort.SortScalarsOn()
+        self._depthSort.Update()
+
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputConnection(self._depthSort.GetOutputPort())
+        mapper.ScalarVisibilityOff()
+        mapper.Update()
+
+        self._surface = vtk.vtkActor()
+        self._surface.SetMapper(mapper)
+        self._surface.GetProperty().SetColor((0, 0.5, 0.75))
+        self._surface.GetProperty().SetOpacity(0.5)
+        self._surface.PickableOff()
+
+        self._surface.GetProperty().SetRepresentationToSurface()
+
+        self._surface.GetProperty().SetInterpolationToGouraud()
+        self._surface.GetProperty().SetSpecular(.4)
+        self._surface.GetProperty().SetSpecularPower(10)
+
+        self._renderer.AddActor(self._surface)
+
+        self._surface.SetPosition(lower_bounds[0, 0], lower_bounds[0, 1], lower_bounds[0, 2])
+
+        self._iren.Render()
+
+        logging.info('... done')
+
+    def build_events(self):
+        """Build the events.
+        """
+
+        self._iren.AddObserver('LeftButtonPressEvent', self.on_pick)
+        self._iren.AddObserver('RightButtonPressEvent', self.on_show_atom_info)
 
     def build_scene(self):
-        '''
-        build a vtkPolyData object for a given frame of the trajectory
+        '''Build the scene.
         '''
 
         actor_list = []
@@ -218,7 +304,7 @@ class MolecularViewer(QtWidgets.QWidget):
         return assembly
 
     def clear_trajectory(self):
-        """Clear the trajectory and the vtk scene.
+        """Clear the vtk scene from atoms and bonds actors.
         """
 
         if not hasattr(self, "_actors"):
@@ -229,13 +315,6 @@ class MolecularViewer(QtWidgets.QWidget):
         self._renderer.RemoveActor(self._actors)
 
         del self._actors
-
-    def enable_picking(self):
-        """Enables the picking of vtk object stored in the scene.
-        """
-
-        self._iren.AddObserver("LeftButtonPressEvent", self.on_pick)
-        self._iren.AddObserver("RightButtonPressEvent", self.on_show_atom_info)
 
     def get_atom_index(self, pid):
         """Return the atom index from the vtk data point index.
@@ -252,6 +331,83 @@ class MolecularViewer(QtWidgets.QWidget):
         """Returns the render window.
         """
         return self._iren.GetRenderWindow()
+
+    @property
+    def iren(self):
+        return self._iren
+
+    def on_change_atomic_trace_opacity(self, opacity):
+        """Event handler called when the opacity level is changed.
+        """
+
+        if self._surface is None:
+            return
+
+        self._surface.GetProperty().SetOpacity(opacity)
+        self._iren.Render()
+
+    def on_change_atomic_trace_isocontour_level(self, level):
+        """Event handler called when the user change the isocontour level.
+        """
+
+        if self._surface is None:
+            return
+
+        self._isocontour.SetValue(0, level)
+        self._isocontour.Update()
+        self._iren.Render()
+
+    def on_change_atomic_trace_rendering_type(self, rendering_type):
+        """Event handler called when the user change the rendering type for the atomic trace.
+        """
+
+        if self._surface is None:
+            return
+
+        if rendering_type == 'wireframe':
+            self._surface.GetProperty().SetRepresentationToWireframe()
+        elif rendering_type == 'surface':
+            self._surface.GetProperty().SetRepresentationToSurface()
+        elif rendering_type == 'points':
+            self._surface.GetProperty().SetRepresentationToPoints()
+            self._surface.GetProperty().SetPointSize(3)
+        else:
+            return
+
+        self._iren.Render()
+
+    def on_clear_atomic_trace(self):
+        """Event handler called when the user select the 'Atomic trace -> Clear' main menu item
+        """
+
+        if self._surface is None:
+            return
+
+        self._surface.VisibilityOff()
+        self._surface.ReleaseGraphicsResources(self._iren.GetRenderWindow())
+        self._renderer.RemoveActor(self._surface)
+        self._iren.Render()
+
+        self._surface = None
+
+    def on_open_atomic_trace_settings_dialog(self):
+        """Event handler which pops the atomic trace settings.
+        """
+
+        if self._surface is None:
+            return
+
+        hist_min = self._atomic_trace_histogram.min()
+        hist_max = self._atomic_trace_histogram.max()
+        hist_mean = self._atomic_trace_histogram.mean()
+
+        dlg = AtomicTraceSettingsDialog(hist_min, hist_max, hist_mean, self)
+
+        dlg.rendering_type_changed.connect(self.on_change_atomic_trace_rendering_type)
+        dlg.opacity_changed.connect(self.on_change_atomic_trace_opacity)
+        dlg.isocontour_level_changed.connect(self.on_change_atomic_trace_isocontour_level)
+
+        dlg.show()
 
     def on_pick(self, obj, event=None):
         """Event handler when an atom is mouse-picked with the left mouse button
@@ -278,6 +434,8 @@ class MolecularViewer(QtWidgets.QWidget):
 
         self.on_pick_atom(picked_atom)
 
+        self._iren.GetInteractorStyle().OnLeftButtonDown()
+
     def on_pick_atom(self, picked_atom):
         """Change the color of a selected atom
         """
@@ -297,8 +455,7 @@ class MolecularViewer(QtWidgets.QWidget):
                 index, self._atom_scales[index], self._atom_colours[index], index)
 
         # Save the scale and color of the picked atom
-        self._previously_picked_atom = (
-            picked_atom, self._atom_scales[picked_atom], self._atom_colours[picked_atom])
+        self._previously_picked_atom = (picked_atom, self._atom_scales[picked_atom], self._atom_colours[picked_atom])
 
         # Set its colors with the default value for atom selection and increase its size
         self._atom_colours[picked_atom] = RGB_COLOURS['selection'][0]
@@ -340,6 +497,20 @@ class MolecularViewer(QtWidgets.QWidget):
             return
 
         self.show_atom_info.emit(picked_atom)
+
+        self._iren.GetInteractorStyle().OnRightButtonDown()
+
+    def on_show_atomic_trace(self):
+
+        if self._previously_picked_atom is None:
+            logging.warning('No atom selected for computing atomic trace')
+            return
+
+        self._draw_isosurface(self._previously_picked_atom[0])
+
+    @ property
+    def renderer(self):
+        return self._renderer
 
     def set_connectivity_builder(self, coords, covalent_radii):
 

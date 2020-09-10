@@ -110,6 +110,22 @@ class MainWindow(QtWidgets.QMainWindow):
 
         database_menu.addAction(add_standard_residue_action)
 
+        atomic_trace_menu = menubar.addMenu('&Atomic trace')
+
+        clear_atomic_trace_action = QtWidgets.QAction('Clear', self)
+        clear_atomic_trace_action.triggered.connect(self._molecular_viewer.on_clear_atomic_trace)
+
+        open_atomic_trace_settings_action = QtWidgets.QAction('Settings', self)
+        open_atomic_trace_settings_action.triggered.connect(self._molecular_viewer.on_open_atomic_trace_settings_dialog)
+
+        show_atomic_trace_action = QtWidgets.QAction('Show', self)
+        show_atomic_trace_action.triggered.connect(self._molecular_viewer.on_show_atomic_trace)
+
+        atomic_trace_menu.addAction(clear_atomic_trace_action)
+        atomic_trace_menu.addSeparator()
+        atomic_trace_menu.addAction(show_atomic_trace_action)
+        atomic_trace_menu.addAction(open_atomic_trace_settings_action)
+
     def build_widgets(self):
         """Build the widgets of the main window.
         """
@@ -120,8 +136,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._atoms_table.setSelectionBehavior(QtWidgets.QTableView.SelectRows)
         self._atoms_table.setSelectionMode(QtWidgets.QTableView.SingleSelection)
         self._atoms_table.setColumnCount(7)
-        self._atoms_table.setHorizontalHeaderLabels(
-            ['residue name', 'residue id', 'atom name', 'atom id', 'x', 'y', 'z'])
+        self._atoms_table.setHorizontalHeaderLabels(['residue name', 'residue id', 'atom name', 'atom id', 'x', 'y', 'z'])
 
         self._molecular_viewer = MolecularViewer(self._main_frame)
         self._molecular_viewer.renderer.ResetCamera()
@@ -207,11 +222,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._reader = None
 
-        self.build_menu()
-
         self.build_widgets()
 
         self.build_layout()
+
+        self.build_menu()
 
         self.build_events()
 

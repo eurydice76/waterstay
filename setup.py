@@ -90,7 +90,7 @@ package_data = find_package_data(where='src', package='waterstay')
 # Scripts section
 #################################
 
-scripts = glob.glob(os.path.join('scripts','*'))
+scripts = glob.glob(os.path.join('scripts', '*'))
 
 #################################
 # Extensions section
@@ -104,13 +104,16 @@ if 'linux' in sys.platform:
 
 EXTENSIONS = [Extension('waterstay.extensions.connectivity',
                         include_dirs=INCLUDE_DIR,
-                        sources=[os.path.join("cython", 'connectivity', 'connectivity.pyx')],
+                        sources=[os.path.join("cython", 'connectivity.pyx')],
                         language="c++",
                         extra_compile_args=["-std=c++11"],
                         extra_link_args=["-std=c++11"]),
+              Extension('waterstay.extensions.histogram_3d',
+                        include_dirs=INCLUDE_DIR,
+                        sources=[os.path.join("cython", 'histogram_3d.pyx')]),
               Extension('waterstay.extensions.atoms_in_shell',
                         include_dirs=INCLUDE_DIR,
-                        sources=[os.path.join("cython", 'atoms_in_shell', 'atoms_in_shell.pyx')])]
+                        sources=[os.path.join("cython", 'atoms_in_shell.pyx')])]
 
 CMDCLASS = {'build_ext': cython_build_ext}
 
@@ -118,8 +121,8 @@ CMDCLASS = {'build_ext': cython_build_ext}
 # The setup section
 #################################
 
-with open('requirements.txt','r') as fin:
-	deps = fin.readlines()
+with open('requirements.txt', 'r') as fin:
+    deps = fin.readlines()
 
 setup(name="waterstay",
       version=package_info["__version__"],

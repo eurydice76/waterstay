@@ -24,7 +24,7 @@ class ResidenceTimesDialog(QtWidgets.QDialog):
         self.init_ui()
 
     def init_ui(self):
-        """Set the the widgets of the dialog
+        """Set the widgets of the dialog
         """
 
         self.build_widgets()
