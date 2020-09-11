@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 import sys
 
 import yaml
@@ -14,6 +15,7 @@ from waterstay.readers.reader_registry import REGISTERED_READERS
 from waterstay.gui.logger_widget import QTextEditLogger
 from waterstay.gui.molecular_viewer import MolecularViewer
 from waterstay.gui.residence_times_dialog import ResidenceTimesDialog
+from waterstay.gui.trjconv_settings_dialog import TrjConvSettingsDialog
 from waterstay.utils.progress_bar import progress_bar
 
 
@@ -85,7 +87,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """Build the menu of the main window.
         """
 
-        file_action = QtWidgets.QAction(QtGui.QIcon('file.png'), '&File', self)
+        file_action = QtWidgets.QAction('&File', self)
         file_action.setShortcut('Ctrl+O')
         file_action.setStatusTip('Open trajectory file')
         file_action.triggered.connect(self.on_open_trajectory_file)
@@ -95,10 +97,17 @@ class MainWindow(QtWidgets.QMainWindow):
         exit_action.setStatusTip('Exit application')
         exit_action.triggered.connect(self.on_quit_application)
 
+        process_trajectory_action = QtWidgets.QAction('&Process trajectory', self)
+        process_trajectory_action.setShortcut('Ctrl+P')
+        process_trajectory_action.setStatusTip('Process trajectory using trjconv external program')
+        process_trajectory_action.triggered.connect(self.on_process_trajectory)
+
         menubar = self.menuBar()
         file_menu = menubar.addMenu('&File')
 
         file_menu.addAction(file_action)
+        file_menu.addAction(process_trajectory_action)
+        file_menu.addSeparator()
         file_menu.addAction(exit_action)
 
         database_menu = menubar.addMenu('&Database')
@@ -286,8 +295,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # Pop up a file browser
         options = QtWidgets.QFileDialog.Options()
         options |= QtWidgets.QFileDialog.DontUseNativeDialog
-        trajectory_file, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Open trajectory file", "", "PDB Files (*.pdb);;Gromacs Files (*.gro)", options=options)
+        supported_files = ['(*{})'.format(ext) for ext in REGISTERED_READERS]
+        supported_files = ';;'.join(supported_files)
+        trajectory_file, _ = QtWidgets.QFileDialog.getOpenFileName(self, 'Open trajectory file', '', supported_files, options=options)
 
         # If not trajectory file was selected, exit
         if not trajectory_file:
@@ -331,6 +341,18 @@ class MainWindow(QtWidgets.QMainWindow):
         """
 
         self._atoms_table.selectRow(picked_atom)
+
+    def on_process_trajectory(self):
+        """Event handler called when the File -> Process trajectory menu item is fired.
+        """
+
+        if shutil.which('gmx') is None:
+            logging.error('gmx program could not be found in the PATH')
+            return
+
+        dlg = TrjConvSettingsDialog()
+
+        dlg.exec_()
 
     def on_quit_application(self):
         """Event handler when the application is exited.
