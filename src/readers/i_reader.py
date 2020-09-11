@@ -38,15 +38,9 @@ class IReader(abc.ABC):
 
         self._filename = filename
 
-        self._fin = open(self._filename, "r")
-
         self._n_frames = 0
 
         self._n_atoms = 0
-
-    def __del__(self):
-
-        self._fin.close()
 
     @property
     def filename(self):
@@ -95,16 +89,39 @@ class IReader(abc.ABC):
         return self._times
 
     @abc.abstractmethod
-    def parse_first_frame(self):
-        pass
-
-    @abc.abstractmethod
     def read_frame(self, frame):
         pass
 
     @abc.abstractmethod
     def read_pbc(self, frame):
         pass
+
+    def get_atom_indexes(self, residue_names, atom_names):
+        """Return the nested list of the indexes of the atoms whose residue and name are respectively in the provided 
+        list of residue and atom names.
+
+        Args:
+            residue_names (list of str): the residues to scan
+            atom_names (list of str): the atoms to scan
+        """
+
+        indexes = []
+        for i, at in enumerate(self._atom_names):
+            current_residue = self._residue_names[i]
+            if current_residue not in residue_names:
+                continue
+
+            if at in atom_names:
+                indexes.append(i)
+
+        indexes_per_molecule = collections.OrderedDict()
+        for idx in indexes:
+            resid = self._residue_ids[idx]
+            indexes_per_molecule.setdefault(resid, []).append(idx)
+
+        indexes_per_molecule = list(indexes_per_molecule.values())
+
+        return indexes_per_molecule
 
     def guess_atom_types(self):
         """Guess the atom type (element) from their atom names.
@@ -156,33 +173,6 @@ class IReader(abc.ABC):
                     if start == 0:
                         raise ValueError('Unknown atom type: {}'.format(atom_name))
                     start -= 1
-
-    def get_atom_indexes(self, residue_names, atom_names):
-        """Return the nested list of the indexes of the atoms whose residue and name are respectively in the provided 
-        list of residue and atom names.
-
-        Args:
-            residue_names (list of str): the residues to scan
-            atom_names (list of str): the atoms to scan
-        """
-
-        indexes = []
-        for i, at in enumerate(self._atom_names):
-            current_residue = self._residue_names[i]
-            if current_residue not in residue_names:
-                continue
-
-            if at in atom_names:
-                indexes.append(i)
-
-        indexes_per_molecule = collections.OrderedDict()
-        for idx in indexes:
-            resid = self._residue_ids[idx]
-            indexes_per_molecule.setdefault(resid, []).append(idx)
-
-        indexes_per_molecule = list(indexes_per_molecule.values())
-
-        return indexes_per_molecule
 
     def read_atom_trajectory(self, index):
         """Read the trajectory of a single atom with a given index

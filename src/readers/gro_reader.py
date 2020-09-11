@@ -4,20 +4,19 @@ import sys
 
 import numpy as np
 
-from waterstay.readers.i_reader import InvalidFileError, IReader
+from waterstay.readers.ascii_reader import ASCIIReader
 from waterstay.readers.reader_registry import register_reader
 
 
 @register_reader('.gro')
-class GromacsReader(IReader):
+class GroReader(ASCIIReader):
 
     def __init__(self, filename):
 
-        IReader.__init__(self, filename)
+        super(GroReader, self).__init__(filename)
 
         # Read the title line and store its length
         first_title = self._fin.readline()
-        first_title_size = len(first_title)
 
         # Read the number of atoms. Must be an integer.
         try:

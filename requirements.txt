@@ -5,4 +5,5 @@ pandas
 PyQt5
 PyYAML
 vtk
+MDAnalysis
 

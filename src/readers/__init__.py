@@ -3,30 +3,32 @@ import os
 
 from .reader_registry import REGISTERED_READERS
 
+
 def path_to_module(path, stop=''):
-    
+
     path, _ = os.path.splitext(path)
-    
-    splittedPath = path.split(os.sep)
-        
+
+    splitted_path = path.split(os.sep)
+
     try:
-        idx = splittedPath[::-1].index(stop)
+        idx = splitted_path[::-1].index(stop)
     except ValueError:
         idx = 0
     finally:
-        module = ".".join(splittedPath[len(splittedPath)-1-idx:])
-            
+        module = ".".join(splitted_path[len(splitted_path)-1-idx:])
+
     return module
 
-# Import all classes in this directory so that classes with @register_reader are registered. 
+
+# Import all classes in this directory so that classes with @register_reader are registered.
 pwd = os.path.dirname(__file__)
 for x in glob.glob(os.path.join(pwd, '*.py')):
-    mod,_ = os.path.splitext(x)
+    mod, _ = os.path.splitext(x)
     mod = os.path.basename(mod)
     if mod.startswith('__'):
         continue
 
-    module = path_to_module(x,stop="waterstay")
+    module = path_to_module(x, stop="waterstay")
     __import__(module, globals(), locals())
 
 __all__ = ['REGISTERED_READERS']

@@ -3,16 +3,16 @@ import re
 
 import numpy as np
 
-from waterstay.readers.i_reader import InvalidFileError, IReader
+from waterstay.readers.ascii_reader import ASCIIReader
 from waterstay.readers.reader_registry import register_reader
 
 
 @register_reader('.pdb')
-class PDBReader(IReader):
+class PDBReader(ASCIIReader):
 
     def __init__(self, filename):
 
-        IReader.__init__(self, filename)
+        super(PDBReader, self).__init__(filename)
 
         # Compute the number of atoms
         self._n_atoms = 0
@@ -167,6 +167,6 @@ if __name__ == '__main__':
 
     reader = PDBReader(pdb_file)
 
-    indexes = reader.get_mol_indexes('ARG', ['2HH2'])
+    indexes = reader.get_atom_indexes('ARG', ['2HH2'])
 
-    print(indexes)
+    print(reader.residue_ids)
