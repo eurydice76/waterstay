@@ -1,3 +1,9 @@
+version 0.0.11
+--------------
+* ADDED   support for gromacs trr and xtc trajectories
+* ADDED   gmx trjconv program can be called directly from the waterstay application 
+* ADDED   visualization of the atomic trace (experimental)
+
 version 0.0.10
 --------------
 * CHANGED the main layout
