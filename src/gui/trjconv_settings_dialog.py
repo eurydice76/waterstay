@@ -109,6 +109,12 @@ class TrjConvSettingsDialog(QtWidgets.QDialog):
 
         self._trajectory_file_lineedit.setText(filename)
 
+        basename, ext = os.path.splitext(filename)
+
+        output_file = basename + '_centered' + ext
+
+        self._output_file_lineedit.setText(output_file)
+
     def on_browse_output_file(self):
         """Event handler which pops up a file selector for the output trajectory file.
         """
