@@ -5,6 +5,7 @@ import sys
 import numpy as np
 
 from waterstay.readers.ascii_reader import ASCIIReader
+from waterstay.readers.i_reader import InvalidFileError
 from waterstay.readers.reader_registry import register_reader
 
 
@@ -98,6 +99,9 @@ class GroReader(ASCIIReader):
             frame (int): the selected frame
         """
 
+        # Fold the frame
+        frame %= self._n_frames
+
         # Rewind the file to the beginning of the frame
         self._fin.seek(self._frame_starts[frame])
 
@@ -128,18 +132,12 @@ class GroReader(ASCIIReader):
         # Fold the frame
         frame %= self._n_frames
 
-        # Rewind the file to the beginning
-        self._fin.seek(0)
-
         pbc = np.zeros((3, 3), dtype=np.float)
 
-        title_sizes = sum(self._title_sizes[:frame+1])
+        # Rewind the file to the beginning of the frame
+        self._fin.seek(self._pbc_starts[frame])
 
-        # Go to the beginning of the frame-th pbc block
-        self._fin.seek(title_sizes + frame*(self._n_atoms_size + self._frame_size +
-                                            self._pbc_size) + self._n_atoms_size + self._frame_size)
-
-        data = [float(v) for v in self._fin.read(self._pbc_size).split()]
+        data = self._fin.readline().split()
 
         n_data = len(data)
         if n_data == 3:

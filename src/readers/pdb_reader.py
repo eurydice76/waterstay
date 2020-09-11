@@ -4,6 +4,7 @@ import re
 import numpy as np
 
 from waterstay.readers.ascii_reader import ASCIIReader
+from waterstay.readers.i_reader import InvalidFileError
 from waterstay.readers.reader_registry import register_reader
 
 
@@ -95,6 +96,9 @@ class PDBReader(ASCIIReader):
         Args:
             frame (int): the selected frame
         """
+
+        # Fold the frame
+        frame %= self._n_frames
 
         # Rewind the file to the beginning of the frame
         self._fin.seek(self._frame_starts[frame])
