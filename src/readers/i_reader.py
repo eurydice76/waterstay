@@ -219,12 +219,12 @@ class IReader(abc.ABC):
             return None
 
         # Initialize the output array
-        occupancies = np.zeros((len(target_indexes), self._n_frames), dtype=np.int32)
+        occupancies = np.zeros((len(target_indexes), len(selected_frames)), dtype=np.int32)
 
         progress_bar.reset(len(selected_frames))
 
         # Loop over the frame of the trajectory
-        for frame in selected_frames:
+        for i, frame in enumerate(selected_frames):
 
             # Read the frame at time=frame
             coords = self.read_frame(frame)
@@ -236,9 +236,9 @@ class IReader(abc.ABC):
             rcell = np.linalg.inv(cell)
 
             # Scan for the molecules of the selected type which are found around the atomic center by the selected radius
-            atoms_in_shell(coords, cell, rcell, target_indexes, center, radius, occupancies[:, frame])
+            atoms_in_shell(coords, cell, rcell, target_indexes, center, radius, occupancies[:, i])
 
-            progress_bar.update(frame+1)
+            progress_bar.update(i+1)
 
         mol_ids = [self._residue_ids[v[0]] for v in target_indexes]
 
