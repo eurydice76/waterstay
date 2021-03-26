@@ -8,6 +8,15 @@ atoms:
     atomic_radius: 0.79
     color: 255;255;255
     element: H
+  Mw:
+    name: ghost-atom
+    symbol: Mw
+    atomic_weight: 1.0079
+    vdw_radius: 1.09
+    covalent_radius: 0.22999999999999998
+    atomic_radius: 0.79
+    color: 255;255;255
+    element: H
   H:
     name: hydrogen
     symbol: H
