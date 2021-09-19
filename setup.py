@@ -3,33 +3,18 @@ import glob
 import os
 import sys
 
-from distutils.util import convert_path
-from distutils.sysconfig import get_config_vars
-from setuptools import Extension, setup
-
-from Cython.Distutils import build_ext as cython_build_ext
-
 import numpy as np
 
+from distutils.sysconfig import get_config_vars
+from distutils.util import convert_path
 
-def find_packages(path, base=None, exclude=None):
+from setuptools import find_packages, Extension, setup
 
-    packages = []
-
-    for root, _, files in os.walk(path):
-        if "__init__.py" in files:
-            if base is not None:
-                root = root.replace(path, base)
-            package = root.replace(os.sep, ".")
-            packages.append(package)
-
-    return packages
-
+from Cython.Distutils import build_ext as cython_build_ext
 
 EXCLUDE = ('*.py', '*.pyc', '*$py.class', '*~', '.*', '*.bak', '*.so', '*.pyd')
 
 EXCLUDE_DIRECTORIES = ('__pycache__', 'CVS', '_darcs', 'build', '.svn', '.git', 'dist')
-
 
 def find_package_data(where='.', package='', exclude=EXCLUDE, exclude_directories=EXCLUDE_DIRECTORIES, only_in_packages=True, show_ignored=False):
 
@@ -74,21 +59,13 @@ def find_package_data(where='.', package='', exclude=EXCLUDE, exclude_directorie
 
     return out
 
-#################################
-# Packages section
-#################################
-
-
 package_info = {}
-exec(open("src/__pkginfo__.py").read(), {}, package_info)
+exec(open('src/waterstay/__pkginfo__.py').read(), {}, package_info)
 
-package = find_packages(path="src", base="waterstay")
+with open('requirements.txt', 'r') as fin:
+    install_requires = fin.readlines()
 
-package_data = find_package_data(where='src', package='waterstay')
-
-#################################
-# Scripts section
-#################################
+package_data = find_package_data(where='src', package='')
 
 scripts = glob.glob(os.path.join('scripts', '*'))
 
@@ -104,41 +81,34 @@ if 'linux' in sys.platform:
 
 EXTENSIONS = [Extension('waterstay.extensions.connectivity',
                         include_dirs=INCLUDE_DIR,
-                        sources=[os.path.join("cython", 'connectivity.pyx')],
-                        language="c++",
-                        extra_compile_args=["-std=c++11"],
-                        extra_link_args=["-std=c++11"]),
+                        sources=[os.path.join('cython', 'connectivity.pyx')],
+                        language='c++',
+                        extra_compile_args=['-std=c++11'],
+                        extra_link_args=['-std=c++11']),
               Extension('waterstay.extensions.histogram_3d',
                         include_dirs=INCLUDE_DIR,
-                        sources=[os.path.join("cython", 'histogram_3d.pyx')]),
+                        sources=[os.path.join('cython', 'histogram_3d.pyx')]),
               Extension('waterstay.extensions.atoms_in_shell',
                         include_dirs=INCLUDE_DIR,
-                        sources=[os.path.join("cython", 'atoms_in_shell.pyx')])]
+                        sources=[os.path.join('cython', 'atoms_in_shell.pyx')])]
 
 CMDCLASS = {'build_ext': cython_build_ext}
 
-#################################
-# The setup section
-#################################
-
-with open('requirements.txt', 'r') as fin:
-    deps = fin.readlines()
-
-setup(name="waterstay",
-      version=package_info["__version__"],
-      description=package_info["__description__"],
-      long_description=package_info["__long_description__"],
-      author=package_info["__author__"],
-      author_email=package_info["__author_email__"],
-      maintainer=package_info["__maintainer__"],
-      maintainer_email=package_info["__maintainer_email__"],
-      license=package_info["__license__"],
-      install_requires=deps,
-      packages=package,
+setup(name='waterstay',
+      version=package_info['__version__'],
+      description=package_info['__description__'],
+      long_description=package_info['__long_description__'],
+      author=package_info['__author__'],
+      author_email=package_info['__author_email__'],
+      maintainer=package_info['__maintainer__'],
+      maintainer_email=package_info['__maintainer_email__'],
+      license=package_info['__license__'],
+      install_requires=install_requires,
+      packages=find_packages('src'),
+      package_dir={'': 'src'},
       package_data=package_data,
-      package_dir={"waterstay": "src"},
       ext_modules=EXTENSIONS,
       cmdclass=CMDCLASS,
-      platforms=['Unix', 'Windows'],
+      platforms=['Linux'],
       include_dirs=['/usr/include/eigen3/'],
       scripts=scripts)

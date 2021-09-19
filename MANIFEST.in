@@ -1,0 +1,7 @@
+graft src/waterstay
+
+include README.md
+include CHANGELOG.md
+include CONTRIBUTORS.md LICENSE
+
+global-exclude __pycache__
