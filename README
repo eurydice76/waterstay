@@ -1,0 +1,5 @@
+# waterstay
+
+waterstay is a PyQt-based GUI application used to compute residence time of various molecule regarding a reference 
+molecule based on Gromacs MD trajectories.
+
